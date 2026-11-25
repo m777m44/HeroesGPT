@@ -11,6 +11,7 @@ import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -41,7 +42,7 @@ public class ArenaHomeActivity extends Activity {
     private TextView nameA;
     private TextView nameB;
     private LinearLayout voteBar;
-    private Button battleGo;
+    private ImageButton battleGo;
     private Button newBattleBtn;
     private boolean battleBusy;
     private String lastQuestion = "";
