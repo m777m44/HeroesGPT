@@ -56,7 +56,18 @@ public class ArenaHomeActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        CrashCatcher.install(this);
         super.onCreate(savedInstanceState);
+        try {
+            setContentView(R.layout.activity_arena_home);
+            setupAll(savedInstanceState);
+            CrashCatcher.reportIfCrashed(this);
+        } catch (Throwable t) {
+            CrashCatcher.showErrorScreen(this, t);
+        }
+    }
+
+    private void setupAll(Bundle savedInstanceState) {
         setContentView(R.layout.activity_arena_home);
 
         flipper = findViewById(R.id.flipper);
@@ -419,10 +430,31 @@ public class ArenaHomeActivity extends Activity {
                         Button b = findViewById(R.id.header_update);
                         b.setText(R.string.update_available_badge);
                         b.setTextColor(getColor(R.color.danger));
+                        showBanner(info);
                     });
                 }
             } catch (Exception ignored) {
             }
         }).start();
+    }
+
+    private void showBanner(Updater.Info info) {
+        View banner = findViewById(R.id.update_banner);
+        if (banner == null || banner.getVisibility() == View.VISIBLE) return;
+        TextView msg = findViewById(R.id.banner_msg);
+        if (msg != null && info != null) {
+            String notes = info.notes == null ? "" : info.notes;
+            int cut = notes.indexOf(46);
+            String line = notes.isEmpty() ? "" 
+                    : notes.substring(0, cut > 0 && cut < 90 ? cut : Math.min(notes.length(), 90));
+            msg.setText(getString(R.string.banner_update_msg, info.versionName));
+            TextView notesView = findViewById(R.id.banner_notes);
+            if (notesView != null) notesView.setText(line);
+        }
+        banner.setVisibility(View.VISIBLE);
+        banner.startAnimation(android.view.animation.AnimationUtils.loadAnimation(this, R.anim.slide_up));
+        findViewById(R.id.banner_update).setOnClickListener(v ->
+                startActivity(new Intent(this, UpdateActivity.class)));
+        findViewById(R.id.banner_close).setOnClickListener(v -> banner.setVisibility(View.GONE));
     }
 }

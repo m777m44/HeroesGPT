@@ -144,4 +144,11 @@
     <string name="section_maintenance">🛠️ الصيانة والبيانات</string>
     <string name="stats_title_short">📊 الإحصائيات</string>
     <string name="chats_short">💾 المحادثات</string>
+    <string name="crash_title">⚠️ حدث خطأ سابقًا</string>
+    <string name="crash_msg">سجّلنا تفاصيل الخطأ — شاركها معنا لإصلاحه فورًا.</string>
+    <string name="error_screen">تعذّر تحميل الشاشة</string>
+    <string name="retry">🔄 إعادة المحاولة</string>
+    <string name="banner_update_msg">⬇️ إصدار جديد %1$s متاح — اضغط للتحديث الفوري</string>
+    <string name="banner_btn_update">تحديث</string>
+    <string name="banner_btn_close">✕</string>
 </resources>
