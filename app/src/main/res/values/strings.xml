@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HeroesGPT</string>
+    <string name="tagline">فريقُ أبطالِ الذكاء الاصطناعي</string>
+    <string name="goal_hint">اكتب فكرتك… مهمة، مشروع، أو سؤال. الفريق يتولى الباقي.</string>
+    <string name="launch">⚡ انطلق يا أبطال</string>
+    <string name="team">الفريق</string>
+    <string name="providers">الطاقة (المزوّدون)</string>
+    <string name="projects">المشاريع</string>
+    <string name="resume">⚡ أكمل من حيث توقفت</string>
+    <string name="enter_goal">اكتب فكرتك أولًا يا قائد</string>
+    <string name="mission_complete">Mission complete ✓ — سُلّم التقرير النهائي</string>
+    <string name="mission_paused">المهمة محفوظة — يمكنك الإكمال لاحقًا من حيث توقفت</string>
+    <string name="majestic_welcome">الفريق جاهز. عشرة أبطال آنفة تحت أمرك.\nاكتب فكرتك ودَع القافلة تتحرك.</string>
+    <string name="latest_run">أحدث مهمة: %1$s\nالمرحلة %2$d من %3$d — الدور القادم: %4$s</string>
+    <string name="progress_counter">%1$d من %2$d أبطال أنجزوا دورهم</string>
+    <string name="team_intro">عشرة أبطال، كل بطل مهنة. اضغط للتعديل، واضغط مطولًا للحذف أو الترتيب، واضغط زر الحالة للإيقاف المؤقت.</string>
+    <string name="add_hero">➕ بطل جديد</string>
+    <string name="edit_hero">تعديل البطل</string>
+    <string name="active">نشط</string>
+    <string name="paused">متوقف</string>
+    <string name="move_up">ترقية للأعلى</string>
+    <string name="delete">حذف</string>
+    <string name="cancel">إلغاء</string>
+    <string name="save">حفظ</string>
+    <string name="emoji_label">الشعار (إيموجي)</string>
+    <string name="name_label">المهنة</string>
+    <string name="system_label">تعليمات البطل (نظام الدور)</string>
+    <string name="providers_intro">الطاقة التي يقود بها الفريق. المزوّد المجاني يعمل بدون مفتاح فورًا، وأضف المفاتيح المجانية الأخرى لتوزيع الحمل تلقائيًا بين المزوّدين (تدوير) فلا ينفد رصيدك.</string>
+    <string name="add_provider">➕ إضافة مزوّد</string>
+    <string name="choose_preset">اختر مزوّدًا</string>
+    <string name="edit_provider">إعداد المزوّد</string>
+    <string name="ready">جاهز ✓</string>
+    <string name="needs_key">بحاجة إلى مفتاح</string>
+    <string name="provider_name_label">الاسم</string>
+    <string name="base_label">العنوان (Base URL)</string>
+    <string name="model_label">النموذج</string>
+    <string name="key_label">المفتاح (اتركه فارغًا للمجاني بلا مفتاح)</string>
+    <string name="no_projects">لا مهام بعد. عد للقيادة واكتب أول فكرة.</string>
+    <string name="delete_title">حذف؟</string>
+    <string name="project_done">اكتمل ✓ — %1$d دورًا</string>
+    <string name="project_progress">قيد التنفيذ — مرحلة %1$d من %2$d</string>
+</resources>
