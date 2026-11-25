@@ -18,17 +18,28 @@ public class Api {
             try {
                 return chatOnce(p, system, userContent);
             } catch (Exception e) {
-                String m = String.valueOf(e.getMessage());
-                boolean retryable = m.contains("HTTP 429") || m.contains("HTTP 402")
-                        || m.contains("HTTP 500") || m.contains("HTTP 502")
-                        || m.contains("HTTP 503") || m.contains("HTTP 504");
-                last = e;
+                String m = String.valueOf(e.getMessage() == null ? "" : e.getMessage());
+                boolean httpNoRetry = m.startsWith("HTTP 401") || m.startsWith("HTTP 403")
+                        || m.startsWith("HTTP 404") || m.startsWith("HTTP 400");
+                boolean retryable = !httpNoRetry;
+                last = retryable && !m.startsWith("HTTP") ? new Exception(friendlyNetwork(e)) : e;
                 if (!retryable || attempt == 2) break;
                 long wait = retryAfterMs(m);
                 try { Thread.sleep(wait); } catch (InterruptedException ie) { }
             }
         }
         throw last;
+    }
+
+    private static Exception friendlyNetwork(Throwable e) {
+        String m = String.valueOf(e.getMessage() == null ? e.toString() : e.getMessage());
+        if (m.contains("abort") || m.contains("reset") || m.contains("ECONN")) {
+            return new Exception("📶 انقطع الاتصال بالخادم أثناء التوليد — جارٍ إعادة المحاولة تلقائيًا…");
+        }
+        if (m.contains("timeout") || m.contains("Timeout")) {
+            return new Exception("⏱ استغرق توليد الإجابة وقتًا طويلًا — جارٍ إعادة المحاولة…");
+        }
+        return new Exception("⚠️ ضعف شبكة مؤقت — جارٍ إعادة المحاولة…");
     }
 
     private static volatile long lastFreePollAt = 0L;

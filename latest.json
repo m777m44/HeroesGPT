@@ -1,7 +1,7 @@
 {
-  "versionCode": 10,
-  "versionName": "5.3",
+  "versionCode": 11,
+  "versionName": "5.4",
   "apk": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT.apk",
-  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v5.3.apk",
-  "notes": "v5.3: 15 مصدرًا جاهزًا — أضفنا BazaarLink (130 نموذجًا) وTogether (5$ مجانًا) وFireworks وDeepInfra وNVIDIA NIM وSambaNova — تحديث نماذج Gemini إلى 3.8 ونماذج OpenRouter المجانية الحالية — كتالوج مستوحى من OuterSpacee/free-ai-apis"
+  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v5.4.apk",
+  "notes": "v5.4 — إصلاح كامل لمشكلة انقطاع الاتصال (Software caused connection abort) عند بطل المستشار التنفيذي: إعادة محاولة تلقائية 3 مرات لكل خطوة مع تبديل ذكي للمصدر البديل وتهدئة زمنية، وتقليم سياق الفريق لتسريع الردود ومنع انقطاع الشبكة، ورسائل عربية واضحة عند ضعف الاتصال."
 }

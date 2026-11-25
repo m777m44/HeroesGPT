@@ -24,14 +24,18 @@ public class Orchestrator {
     public static String contextUpTo(Stores.Run run, int index) {
         StringBuilder sb = new StringBuilder();
         sb.append("المهمة الأصلية:\n").append(run.goal).append("\n\n");
-        int budget = 6000;
+        int budget = 3500;
         for (int i = 0; i < index && i < run.heroes.size(); i++) {
             Stores.Run.Result res = run.results.get(i);
             if (res.status != Orchestrator.STATUS_DONE || res.output.isEmpty()) continue;
             String out = res.output;
             if (out.length() > budget) out = out.substring(0, budget) + "…\n[اقتُطع جزء لطول النص]";
-            sb.append("--- عمل ").append(run.heroes.get(i).name).append(" ---\n")
-              .append(out).append("\n\n");
+            if (sb.length() > 14000) {
+                sb.append("[سياق مختصر لتسريع الفريق]\n\n");
+            } else {
+                sb.append("--- عمل ").append(run.heroes.get(i).name).append(" ---\n")
+                  .append(out).append("\n\n");
+            }
         }
         return sb.toString();
     }
@@ -75,21 +79,29 @@ public class Orchestrator {
                 res.error = "";
                 ui.post(() -> cb.onStepChanged(idx));
 
-                Provider p = pickProvider(c, hero, i);
-                String prompt = "فكرة المستخدم:\n" + run.goal
-                        + "\n\nما أنجزه من سبقوك في الفريق:\n" + contextUpTo(run, i)
-                        + "\n\nأنت الآن ".concat(hero.name).concat(" في فريق الأبطال. أنجز دورك المحدد في تعليماتك على أعلى مستوى من الجودة والمهنية، وبنفس لغة فكرة المستخدم.");
-                try {
-                    String out = Api.chat(p, hero.system, prompt);
-                    res.output = out;
-                    res.status = STATUS_DONE;
-                } catch (Exception e) {
+                String lastErr = null;
+                for (int attempt = 0; attempt < 3; attempt++) {
+                    Provider p = pickProvider(c, hero, i + attempt);
+                    String prompt = buildPrompt(run, hero, i);
+                    try {
+                        String out = Api.chat(p, hero.system, prompt);
+                        res.output = out;
+                        res.status = STATUS_DONE;
+                        lastErr = null;
+                        break;
+                    } catch (Exception e) {
+                        lastErr = e.getMessage() == null ? "خطأ غير معروف" : e.getMessage();
+                        try {
+                            Thread.sleep(1500L * (attempt + 1));
+                        } catch (InterruptedException ie) { }
+                    }
+                }
+                if (lastErr != null) {
                     res.status = STATUS_FAILED;
-                    res.error = e.getMessage() == null ? "خطأ غير معروف" : e.getMessage();
+                    res.error = lastErr;
                 }
                 run.stage = i + 1;
                 Stores.saveRun(c, run);
-                final Provider used = p;
                 ui.post(() -> {
                     cb.onStepChanged(idx);
                     if (res.status == STATUS_DONE && idx == run.heroes.size() - 1) {
@@ -100,5 +112,12 @@ public class Orchestrator {
             final boolean all = run.stage >= run.heroes.size();
             ui.post(() -> cb.onFinished(all));
         }).start();
+    }
+
+    private static String buildPrompt(Stores.Run run, Hero hero, int index) {
+        return "فكرة المستخدم:\n" + run.goal
+                + "\n\nما أنجزه من سبقوك في الفريق:\n" + contextUpTo(run, index)
+                + "\n\nأنت الآن " + hero.name + " في فريق الأبطال. أنجز دورك المحدد في تعليماتك "
+                + "على أعلى مستوى من الجودة والاحترافية، وبنفس لغة فكرة المستخدم.";
     }
 }
