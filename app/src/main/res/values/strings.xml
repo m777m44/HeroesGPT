@@ -155,4 +155,13 @@
     <string name="mission_status_none">لا مهام بعد — اكتب هدفك واضغط «انطلق يا أبطال».</string>
     <string name="complete_victory">⚡ اكتملت المهمة — الفريق سلّم التقرير</string>
     <string name="complete_stats">🎯 الهدف: %1$s\n🦸 الفريق المُنفّذ: %2$d بطلًا\n✅ مراحل منجزة: %3$d\n⚠️ مراحل متعثرة: %4$d\n\nاقرأ مخرجات كل بطل في القائمة، أو شارك التقرير كاملًا.</string>
+    <string name="get_free_key">🔑 احصل على المفتاح</string>
+    <string name="copy_config">📋 نسخ الإعداد</string>
+    <string name="paste_key">📋 لصق المفتاح</string>
+    <string name="copy_key">نسخ المفتاح</string>
+    <string name="key_copied">نُسخ المفتاح ✓</string>
+    <string name="key_empty">لا يوجد مفتاح محفوظ في هذا المصدر</string>
+    <string name="key_pasted">أُلصق المفتاح — احفظ الآن</string>
+    <string name="clipboard_empty">الحافظة فارغة</string>
+    <string name="key_hint_sk">💡 أنشئ مفتاحك المجاني (يبدأ بـ sk_) من زر «احصل على المفتاح»، اضغط «لصق المفتاح» هنا ثم «حفظ». كل مفتاح يرفع حدهم ويجعل فريقك أسرع.</string>
 </resources>

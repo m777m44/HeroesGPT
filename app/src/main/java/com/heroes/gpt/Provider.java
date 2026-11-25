@@ -10,6 +10,7 @@ public class Provider {
     public String key;
     public boolean enabled = true;
     public boolean noKeyNeeded = false;
+    public String keyUrl = "";
 
     public JSONObject toJson() throws Exception {
         JSONObject o = new JSONObject();
@@ -20,6 +21,7 @@ public class Provider {
         o.put("key", key);
         o.put("enabled", enabled);
         o.put("noKeyNeeded", noKeyNeeded);
+        o.put("keyUrl", keyUrl == null ? "" : keyUrl);
         return o;
     }
 
@@ -32,10 +34,16 @@ public class Provider {
         p.key = o.optString("key", "");
         p.enabled = o.optBoolean("enabled", true);
         p.noKeyNeeded = o.optBoolean("noKeyNeeded", false);
+        p.keyUrl = o.optString("keyUrl", "");
         return p;
     }
 
     public static Provider make(String name, String base, String model, String key, boolean noKeyNeeded) {
+        return make(name, base, model, key, noKeyNeeded, "");
+    }
+
+    public static Provider make(String name, String base, String model, String key,
+                                boolean noKeyNeeded, String keyUrl) {
         Provider p = new Provider();
         p.id = "p" + System.nanoTime();
         p.name = name;
@@ -43,6 +51,7 @@ public class Provider {
         p.model = model;
         p.key = key;
         p.noKeyNeeded = noKeyNeeded;
+        p.keyUrl = keyUrl == null ? "" : keyUrl;
         return p;
     }
 

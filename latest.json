@@ -1,7 +1,7 @@
 {
-  "versionCode": 8,
-  "versionName": "5.1",
+  "versionCode": 9,
+  "versionName": "5.2",
   "apk": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT.apk",
-  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v5.1.apk",
-  "notes": "v5.1: إصلاح كامل لمشاكل الإكمال والمصادر — بطاقة فوز متوهجة عند اكتمال المهمة — رسائل خطأ عربية واضحة مع إعادة محاولة تلقائية — مصدر مجاني ثانٍ (openai-fast) ليختلف النموذجان A/B فعليًا"
+  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v5.2.apk",
+  "notes": "v5.2: حل مشكلة الحد المجاني — إيقاع ذكي بين النداءات + إعادة محاولة — 9 مصادر جاهزة (Groq عندك وCerebras 1M يوميًا وHugging Face وMistral وCohere وGemini وOpenRouter وDeepSeek وPollinations) — أزرار نسخ ولصق وفتح صفحة المفتاح داخل التطبيق"
 }

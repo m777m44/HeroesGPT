@@ -98,6 +98,42 @@ public class Stores {
         return d;
     }
 
+    public static void ensureRecommendedFreeProviders(Context c) {
+        try {
+            ensureFreeRotationBackup(c);
+            List<Provider> ps = providers(c);
+            boolean changed = false;
+            for (Provider p : ps) {
+                String b = p.base == null ? "" : p.base;
+                if (p.keyUrl == null) p.keyUrl = "";
+                String u = p.keyUrl;
+                if (u.isEmpty() && b.contains("pollinations.ai")) { p.keyUrl = "https://enter.pollinations.ai/?ref=classic"; changed = true; }
+                else if (u.isEmpty() && b.contains("generativelanguage.googleapis.com")) { p.keyUrl = "https://aistudio.google.com/apikey"; changed = true; }
+                else if (u.isEmpty() && b.contains("openrouter.ai")) { p.keyUrl = "https://openrouter.ai/keys"; changed = true; }
+                else if (u.isEmpty() && b.contains("api.deepseek.com")) { p.keyUrl = "https://platform.deepseek.com/api_keys"; changed = true; }
+            }
+            if (!hasBase(ps, "api.groq.com")) {
+                ps.add(Provider.make("Groq — مجاني فائق السرعة", "https://api.groq.com/openai/v1",
+                        "llama-3.3-70b-versatile", "", false, "https://console.groq.com/keys"));
+                ps.add(Provider.make("Cerebras — مجاني (1M يوميًا)", "https://api.cerebras.ai/v1",
+                        "llama-3.3-70b", "", false, "https://cloud.cerebras.ai"));
+                ps.add(Provider.make("Hugging Face — مجاني", "https://router.huggingface.co/v1",
+                        "meta-llama/Llama-3.3-70B-Instruct", "", false, "https://huggingface.co/settings/tokens"));
+                ps.add(Provider.make("Mistral — مجاني (La Plateforme)", "https://api.mistral.ai/v1",
+                        "mistral-small-latest", "", false, "https://console.mistral.ai/api-keys"));
+                ps.add(Provider.make("Cohere — تجربة مجانية", "https://api.cohere.ai/compatibility/v1",
+                        "command-r7b-12-2024", "", false, "https://dashboard.cohere.com/api-keys"));
+                changed = true;
+            }
+            if (changed) saveProviders(c, ps);
+        } catch (Exception ignored) { }
+    }
+
+    private static boolean hasBase(List<Provider> ps, String basePart) {
+        for (Provider p : ps) if (p.base != null && p.base.contains(basePart)) return true;
+        return false;
+    }
+
     public static void ensureFreeRotationBackup(Context c) {
         try {
             List<Provider> ps = providers(c);

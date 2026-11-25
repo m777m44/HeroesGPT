@@ -123,7 +123,7 @@ public class ArenaHomeActivity extends Activity {
         nameA.setOnClickListener(v -> pickBattleHero(true));
         nameB.setOnClickListener(v -> pickBattleHero(false));
 
-        Stores.ensureFreeRotationBackup(this);
+        Stores.ensureRecommendedFreeProviders(this);
         switchTab(0);
         startNewBattle();
         checkUpdateSilently();

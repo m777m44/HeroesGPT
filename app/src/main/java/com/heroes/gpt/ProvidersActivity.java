@@ -11,6 +11,7 @@ import android.widget.BaseAdapter;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.util.List;
 
@@ -21,7 +22,11 @@ public class ProvidersActivity extends Activity {
 
     private static final String[] PRESET_NAMES = {
             "Pollinations — مجاني بلا مفتاح",
-            "GLM-4.5-Flash — مجاني (z.ai)",
+            "Groq — مجاني فائق السرعة",
+            "Cerebras — مجاني (1M يوميًا)",
+            "Hugging Face — مجاني",
+            "Mistral — مجاني (La Plateforme)",
+            "Cohere — تجربة مجانية",
             "Gemini — مجاني (Google AI Studio)",
             "OpenRouter — نماذج :free",
             "DeepSeek",
@@ -29,7 +34,11 @@ public class ProvidersActivity extends Activity {
     };
     private static final String[] PRESET_BASES = {
             "https://text.pollinations.ai/openai",
-            "https://api.z.ai/api/paas/v4",
+            "https://api.groq.com/openai/v1",
+            "https://api.cerebras.ai/v1",
+            "https://router.huggingface.co/v1",
+            "https://api.mistral.ai/v1",
+            "https://api.cohere.ai/compatibility/v1",
             "https://generativelanguage.googleapis.com/v1beta/openai",
             "https://openrouter.ai/api/v1",
             "https://api.deepseek.com",
@@ -37,13 +46,30 @@ public class ProvidersActivity extends Activity {
     };
     private static final String[] PRESET_MODELS = {
             "openai",
-            "glm-4.5-flash",
+            "llama-3.3-70b-versatile",
+            "llama-3.3-70b",
+            "meta-llama/Llama-3.3-70B-Instruct",
+            "mistral-small-latest",
+            "command-r7b-12-2024",
             "gemini-2.5-flash",
             "deepseek/deepseek-chat-v3-0324:free",
             "deepseek-chat",
             ""
     };
-    private static final boolean[] PRESET_NOKEY = {true, false, false, false, false, false};
+    private static final boolean[] PRESET_NOKEY = {true, false, false, false, false, false, false, false, false, false};
+
+    private static final String[] PRESET_KEYURLS = {
+            "https://enter.pollinations.ai/?ref=classic",
+            "https://console.groq.com/keys",
+            "https://cloud.cerebras.ai",
+            "https://huggingface.co/settings/tokens",
+            "https://console.mistral.ai/api-keys",
+            "https://dashboard.cohere.com/api-keys",
+            "https://aistudio.google.com/apikey",
+            "https://openrouter.ai/keys",
+            "https://platform.deepseek.com/api_keys",
+            ""
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,7 +87,7 @@ public class ProvidersActivity extends Activity {
                     @Override
                     public void onClick(DialogInterface d, int w) {
                         Provider p = Provider.make(PRESET_NAMES[w], PRESET_BASES[w],
-                                PRESET_MODELS[w], "", PRESET_NOKEY[w]);
+                                PRESET_MODELS[w], "", PRESET_NOKEY[w], PRESET_KEYURLS[w]);
                         providers.add(p);
                         Stores.saveProviders(ProvidersActivity.this, providers);
                         adapter.notifyDataSetChanged();
@@ -82,6 +108,19 @@ public class ProvidersActivity extends Activity {
         base.setText(p.base);
         model.setText(p.model);
         key.setText(p.key);
+        dialogView.findViewById(R.id.paste_key_btn).setOnClickListener(v -> {
+            String clip = Utils.paste(this);
+            if (clip.isEmpty()) {
+                Toast.makeText(this, R.string.clipboard_empty, Toast.LENGTH_SHORT).show();
+            } else {
+                key.setText(clip.trim());
+                key.setSelection(clip.trim().length());
+                Toast.makeText(this, R.string.key_pasted, Toast.LENGTH_SHORT).show();
+            }
+        });
+        View keyBtn = dialogView.findViewById(R.id.get_key_btn);
+        keyBtn.setVisibility(p.keyUrl == null || p.keyUrl.isEmpty() ? View.GONE : View.VISIBLE);
+        keyBtn.setOnClickListener(v -> Utils.openUrl(this, p.keyUrl));
         new AlertDialog.Builder(this)
                 .setTitle(R.string.edit_provider)
                 .setView(dialogView)
@@ -128,11 +167,29 @@ public class ProvidersActivity extends Activity {
             final Provider p = providers.get(position);
             TextView name = row.findViewById(R.id.provider_name);
             TextView status = row.findViewById(R.id.provider_status);
+            View copyBtn = row.findViewById(R.id.provider_copy);
+            View keyBtn = row.findViewById(R.id.provider_key);
 
             name.setText(p.name);
             boolean ready = p.noKeyNeeded || !p.key.trim().isEmpty();
             status.setText(ready ? R.string.ready : R.string.needs_key);
             status.setTextColor(getColor(ready ? R.color.ok : R.color.text_dim));
+
+            copyBtn.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Utils.copy(ProvidersActivity.this,
+                            p.name + "\n" + p.base + "\n" + p.model + "\n" + p.key);
+                    Toast.makeText(ProvidersActivity.this, R.string.copied, Toast.LENGTH_SHORT).show();
+                }
+            });
+            keyBtn.setVisibility(p.keyUrl == null || p.keyUrl.isEmpty() ? View.GONE : View.VISIBLE);
+            keyBtn.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Utils.openUrl(ProvidersActivity.this, p.keyUrl);
+                }
+            });
 
             row.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -145,13 +202,23 @@ public class ProvidersActivity extends Activity {
                 public boolean onLongClick(View v) {
                     new AlertDialog.Builder(ProvidersActivity.this)
                             .setTitle(p.name)
-                            .setItems(new CharSequence[]{getString(R.string.delete)},
+                            .setItems(new CharSequence[]{getString(R.string.delete),
+                                            getString(R.string.copy_key), getString(R.string.get_free_key)},
                                     new DialogInterface.OnClickListener() {
                                         @Override
                                         public void onClick(DialogInterface d, int w) {
-                                            providers.remove(position);
-                                            Stores.saveProviders(ProvidersActivity.this, providers);
-                                            adapter.notifyDataSetChanged();
+                                            if (w == 0) {
+                                                providers.remove(position);
+                                                Stores.saveProviders(ProvidersActivity.this, providers);
+                                                adapter.notifyDataSetChanged();
+                                            } else if (w == 1) {
+                                                Utils.copy(ProvidersActivity.this, p.key);
+                                                Toast.makeText(ProvidersActivity.this,
+                                                        p.key.isEmpty() ? R.string.key_empty : R.string.key_copied,
+                                                        Toast.LENGTH_SHORT).show();
+                                            } else {
+                                                Utils.openUrl(ProvidersActivity.this, p.keyUrl);
+                                            }
                                         }
                                     })
                             .setNegativeButton(R.string.cancel, null)

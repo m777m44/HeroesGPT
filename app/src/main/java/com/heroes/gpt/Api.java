@@ -31,6 +31,22 @@ public class Api {
         throw last;
     }
 
+    private static volatile long lastFreePollAt = 0L;
+    private static final long FREE_GAP_MS = 46000L;
+
+    private static void waitFreeSlot() {
+        long since = System.currentTimeMillis() - lastFreePollAt;
+        if (since >= 0 && since < FREE_GAP_MS) {
+            try {
+                Thread.sleep(FREE_GAP_MS - since);
+            } catch (InterruptedException ignored) { }
+        }
+    }
+
+    private static void markFreeCall() {
+        lastFreePollAt = System.currentTimeMillis();
+    }
+
     private static long retryAfterMs(String msg) {
         try {
             int i = msg.indexOf("Retry after ");
@@ -50,6 +66,7 @@ public class Api {
         while (base.endsWith("/")) base = base.substring(0, base.length() - 1);
         String url = base.endsWith("/chat/completions") ? base : base + "/chat/completions";
         boolean isPollinations = base.contains("pollinations.ai");
+        boolean freePoll = isPollinations && (p.noKeyNeeded || p.key.trim().isEmpty());
         if (isPollinations) url += (url.contains("?") ? "&" : "?") + "referrer=heroesgpt";
 
         JSONObject body = new JSONObject();
@@ -79,11 +96,13 @@ public class Api {
             conn.setRequestProperty("Authorization", "Bearer " + p.key.trim());
         }
 
+        if (freePoll) waitFreeSlot();
         byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
         OutputStream out = conn.getOutputStream();
         out.write(payload);
         out.close();
 
+        if (freePoll) markFreeCall();
         int code = conn.getResponseCode();
         InputStream is = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
         String response = read(is);
