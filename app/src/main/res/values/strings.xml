@@ -153,4 +153,6 @@
     <string name="banner_btn_close">✕</string>
     <string name="tab_team">🚀 المهمة</string>
     <string name="mission_status_none">لا مهام بعد — اكتب هدفك واضغط «انطلق يا أبطال».</string>
+    <string name="complete_victory">⚡ اكتملت المهمة — الفريق سلّم التقرير</string>
+    <string name="complete_stats">🎯 الهدف: %1$s\n🦸 الفريق المُنفّذ: %2$d بطلًا\n✅ مراحل منجزة: %3$d\n⚠️ مراحل متعثرة: %4$d\n\nاقرأ مخرجات كل بطل في القائمة، أو شارك التقرير كاملًا.</string>
 </resources>

@@ -98,6 +98,24 @@ public class Stores {
         return d;
     }
 
+    public static void ensureFreeRotationBackup(Context c) {
+        try {
+            List<Provider> ps = providers(c);
+            int usable = 0;
+            for (Provider p : ps) {
+                if (p.enabled && !p.base.trim().isEmpty()
+                        && (p.noKeyNeeded || !p.key.trim().isEmpty())) usable++;
+            }
+            if (usable >= 2) return;
+            for (Provider p : ps) {
+                if (p.base.contains("openai-fast") && p.noKeyNeeded) return;
+            }
+            ps.add(Provider.make("Pollinations Turbo — مجاني بلا مفتاح",
+                    "https://text.pollinations.ai/openai", "openai-fast", "", true));
+            saveProviders(c, ps);
+        } catch (Exception ignored) { }
+    }
+
     public static void saveProviders(Context c, List<Provider> providers) {
         try {
             JSONArray a = new JSONArray();

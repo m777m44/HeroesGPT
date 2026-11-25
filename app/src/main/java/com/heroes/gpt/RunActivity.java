@@ -40,6 +40,23 @@ public class RunActivity extends Activity implements Orchestrator.Callback {
             launch();
         }
         updateButtons();
+        refreshCompletion();
+    }
+
+    private void refreshCompletion() {
+        android.view.View card = findViewById(R.id.complete_card);
+        int done = 0, failed = 0, active = 0;
+        for (Hero h : run.heroes) if (h.enabled) active++;
+        for (Stores.Run.Result r : run.results) {
+            if (r.status == Orchestrator.STATUS_DONE) done++;
+            else if (r.status == Orchestrator.STATUS_FAILED) failed++;
+        }
+        boolean all = active > 0 && done == active;
+        card.setVisibility(all ? View.VISIBLE : View.GONE);
+        if (all) {
+            TextView st = findViewById(R.id.complete_stats);
+            st.setText(getString(R.string.complete_stats, run.goal, active, done, failed));
+        }
     }
 
     private void launch() {
@@ -72,6 +89,7 @@ public class RunActivity extends Activity implements Orchestrator.Callback {
         runOnUiThread(() -> {
             adapter.notifyDataSetChanged();
             updateButtons();
+            refreshCompletion();
         });
     }
 
@@ -81,6 +99,7 @@ public class RunActivity extends Activity implements Orchestrator.Callback {
             running.set(false);
             adapter.notifyDataSetChanged();
             updateButtons();
+            refreshCompletion();
             Toast.makeText(this, allDone ? R.string.mission_complete : R.string.mission_paused,
                     Toast.LENGTH_LONG).show();
         });

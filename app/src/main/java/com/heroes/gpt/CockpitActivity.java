@@ -19,6 +19,7 @@ public class CockpitActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_cockpit);
+        Stores.ensureFreeRotationBackup(this);
         Stores.heroes(this);
         Stores.providers(this);
     }

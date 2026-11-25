@@ -1,7 +1,7 @@
 {
-  "versionCode": 7,
-  "versionName": "5.0",
+  "versionCode": 8,
+  "versionName": "5.1",
   "apk": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT.apk",
-  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v5.0.apk",
-  "notes": "v5.0: تبويب «المهمة» بشاشة فريق AI Agents يعملون معًا — إصلاح النموذج B بالتبديل التلقائي بين المصادر — 36 مهارة في 8 أقسام — تصميم داكن مستقبلي كامل"
+  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v5.1.apk",
+  "notes": "v5.1: إصلاح كامل لمشاكل الإكمال والمصادر — بطاقة فوز متوهجة عند اكتمال المهمة — رسائل خطأ عربية واضحة مع إعادة محاولة تلقائية — مصدر مجاني ثانٍ (openai-fast) ليختلف النموذجان A/B فعليًا"
 }
