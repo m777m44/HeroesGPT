@@ -17,7 +17,7 @@ public class Updater {
     public static final String MANIFEST_URL =
             "https://raw.githubusercontent.com/m777m44/HeroesGPT/main/latest.json";
     public static final String APK_URL =
-            "https://github.com/m777m44/HeroesGPT/releases/latest/download/HeroesGPT.apk";
+            "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT.apk";
     public static final String APK_NAME = "HeroesGPT.apk";
 
     public static class Info {
