@@ -44,6 +44,7 @@ public class ArenaHomeActivity extends Activity {
     private Button battleGo;
     private Button newBattleBtn;
     private boolean battleBusy;
+    private String lastQuestion = "";
 
     private Hero chatHero;
     private final List<String[]> chatConvo = new ArrayList<>();
@@ -92,9 +93,19 @@ public class ArenaHomeActivity extends Activity {
 
         findViewById(R.id.direct_send).setOnClickListener(v -> sendDirect());
         findViewById(R.id.direct_pick).setOnClickListener(v -> pickChatHero(Stores.heroes(this)));
+        findViewById(R.id.direct_save).setOnClickListener(v -> saveDirectChat());
+
+        findViewById(R.id.vote_judge).setOnClickListener(v -> runJudge());
+        findViewById(R.id.battle_share).setOnClickListener(v -> shareBattle());
+        nameA.setOnClickListener(v -> pickBattleHero(true));
+        nameB.setOnClickListener(v -> pickBattleHero(false));
 
         switchTab(0);
         startNewBattle();
+        checkUpdateSilently();
+        if (!Stores.setting(this, "pin").isEmpty()) {
+            startActivity(new Intent(this, LockActivity.class));
+        }
     }
 
     private void switchTab(int i) {
@@ -145,6 +156,8 @@ public class ArenaHomeActivity extends Activity {
             return;
         }
         battleBusy = true;
+        lastQuestion = text;
+        Stats.inc(this, Stats.BATTLES);
         outA.setText(R.string.thinking);
         outB.setText(R.string.thinking);
         final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(2);
@@ -208,6 +221,7 @@ public class ArenaHomeActivity extends Activity {
     private void vote(double sa) {
         if (heroA == null || heroB == null) return;
         Elo.record(this, heroA.id, heroB.id, sa);
+        Stats.inc(this, Stats.VOTES);
         nameA.setText(heroA.emoji + " " + heroA.name);
         nameB.setText(heroB.emoji + " " + heroB.name);
         voteBar.setVisibility(View.GONE);
@@ -240,6 +254,7 @@ public class ArenaHomeActivity extends Activity {
         String text = ((EditText) findViewById(R.id.direct_input)).getText().toString().trim();
         if (text.isEmpty()) return;
         ((EditText) findViewById(R.id.direct_input)).setText("");
+        Stats.inc(this, Stats.MESSAGES);
         chatConvo.add(new String[]{"user", text});
         chatOut.setText(render(chatConvo, chatHero.name));
         chatBusy = true;
@@ -309,4 +324,105 @@ public class ArenaHomeActivity extends Activity {
         });
     }
 
+    private void pickBattleHero(final boolean slotA) {
+        List<Hero> heroes = Stores.heroes(this);
+        List<Hero> enabled = new ArrayList<>();
+        for (Hero h : heroes) if (h.enabled) enabled.add(h);
+        if (enabled.isEmpty()) return;
+        List<String> names = new ArrayList<>();
+        for (Hero h : enabled) names.add(h.emoji + " " + h.name);
+        new AlertDialog.Builder(this)
+                .setTitle(slotA ? R.string.pick_hero_a : R.string.pick_hero_b)
+                .setItems(names.toArray(new String[0]), (d, w) -> {
+                    Hero picked = enabled.get(w);
+                    if (!slotA && heroA != null && picked.id.equals(heroA.id)) {
+                        Toast.makeText(this, R.string.arena_home_need_two, Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (slotA) {
+                        heroA = picked;
+                        convoA.clear();
+                        outA.setText(R.string.empty_chat);
+                    } else {
+                        heroB = picked;
+                        convoB.clear();
+                        outB.setText(R.string.empty_chat);
+                    }
+                })
+                .show();
+    }
+
+    private void runJudge() {
+        if (heroA == null || heroB == null || battleBusy) return;
+        final String ansA = lastAssistant(convoA);
+        final String ansB = lastAssistant(convoB);
+        if (ansA.isEmpty() || ansB.isEmpty()) return;
+        Toast.makeText(this, R.string.judge_thinking, Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            try {
+                List<Provider> usable = usableProviders();
+                if (usable.isEmpty()) throw new IllegalStateException("no providers");
+                Provider p = usable.get(rnd.nextInt(usable.size()));
+                String prompt = getString(R.string.judge_prompt, lastQuestion, clip(ansA, 3000), clip(ansB, 3000));
+                String res = Api.chat(p, "You are a fair precise arena judge. Reply with one word only: A, B, or TIE.", prompt).trim();
+                final double sa;
+                if (res.startsWith("A")) sa = 1.0;
+                else if (res.startsWith("B")) sa = 0.0;
+                else if (res.toUpperCase().contains("TIE")) sa = 0.5;
+                else throw new IllegalStateException("unclear");
+                ui.post(() -> vote(sa));
+            } catch (Exception e) {
+                ui.post(() -> Toast.makeText(this, R.string.judge_failed, Toast.LENGTH_LONG).show());
+            }
+        }).start();
+    }
+
+    private String lastAssistant(List<String[]> convo) {
+        for (int i = convo.size() - 1; i >= 0; i--) {
+            if (convo.get(i)[0].equals("assistant")) return convo.get(i)[1];
+        }
+        return "";
+    }
+
+    private String clip(String s, int max) {
+        return s.length() > max ? s.substring(0, max) + "…" : s;
+    }
+
+    private void shareBattle() {
+        if (lastQuestion.isEmpty()) return;
+        StringBuilder sb = new StringBuilder();
+        sb.append("\u2694\ufe0f \u0645\u0639\u0631\u0643\u0629 HeroesGPT\n\n");
+        sb.append("\ud83e\uddfa \u0627\u0644\u0633\u0624\u0627\u0644:\n").append(lastQuestion).append("\n\n");
+        sb.append("\u2014 A: ").append(safeNameA()).append(" \u2014\n").append(render(convoA, safeNameA()));
+        sb.append("\n\u2014 B: ").append(safeNameB()).append(" \u2014\n").append(render(convoB, safeNameB()));
+        Utils.shareText(this, "HeroesGPT", sb.toString());
+    }
+
+    private void saveDirectChat() {
+        if (chatConvo.isEmpty()) return;
+        String title = chatHero == null ? "\u062f\u0631\u062f\u0634\u0629" : chatHero.emoji + " " + chatHero.name;
+        StringBuilder sb = new StringBuilder();
+        for (String[] m : chatConvo) {
+            sb.append(m[0].equals("user") ? "\ud83e\uddf1 \u0623\u0646\u062a: " : "\u26a1 " + title + ": ").append(m[1]).append("\n\n");
+        }
+        Stores.saveChat(this, title, sb.toString());
+        Stats.inc(this, Stats.SAVED_CHATS);
+        Toast.makeText(this, R.string.saved, Toast.LENGTH_SHORT).show();
+    }
+
+    private void checkUpdateSilently() {
+        new Thread(() -> {
+            try {
+                Updater.Info info = Updater.check();
+                if (info.versionCode > Updater.currentVersionCode(ArenaHomeActivity.this)) {
+                    ui.post(() -> {
+                        Button b = findViewById(R.id.header_update);
+                        b.setText(R.string.update_available_badge);
+                        b.setTextColor(getColor(R.color.danger));
+                    });
+                }
+            } catch (Exception ignored) {
+            }
+        }).start();
+    }
 }

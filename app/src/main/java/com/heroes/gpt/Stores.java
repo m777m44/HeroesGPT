@@ -198,4 +198,103 @@ public class Stores {
     public static void deleteRun(Context c, String id) {
         new File(runsDir(c), id + ".json").delete();
     }
+
+    public static class SavedChat {
+        public String id;
+        public String title;
+        public String text;
+        public long createdAt;
+        public String preview = "";
+    }
+
+    private static File settingsFile(Context c) {
+        File d = new File(c.getFilesDir(), "data");
+        if (!d.exists()) d.mkdirs();
+        return new File(d, "settings.json");
+    }
+
+    public static String setting(Context c, String key) {
+        try {
+            File f = settingsFile(c);
+            if (!f.exists()) return "";
+            FileInputStream in = new FileInputStream(f);
+            byte[] buf = new byte[(int) f.length()];
+            int n = in.read(buf);
+            in.close();
+            return new JSONObject(new String(buf, 0, Math.max(n, 0), StandardCharsets.UTF_8)).optString(key, "");
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    public static void setSetting(Context c, String key, String value) {
+        try {
+            File f = settingsFile(c);
+            JSONObject o = new JSONObject();
+            if (f.exists()) {
+                FileInputStream in = new FileInputStream(f);
+                byte[] buf = new byte[(int) f.length()];
+                int n = in.read(buf);
+                in.close();
+                o = new JSONObject(new String(buf, 0, Math.max(n, 0), StandardCharsets.UTF_8));
+            }
+            o.put(key, value);
+            FileOutputStream out = new FileOutputStream(f);
+            out.write(o.toString().getBytes(StandardCharsets.UTF_8));
+            out.close();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static File chatsDir(Context c) {
+        File d = new File(baseDir(c), "chats");
+        if (!d.exists()) d.mkdirs();
+        return d;
+    }
+
+    public static void saveChat(Context c, String title, String text) {
+        try {
+            File f = new File(chatsDir(c), System.currentTimeMillis() + ".json");
+            JSONObject o = new JSONObject();
+            o.put("id", f.getName().replace(".json", ""));
+            o.put("title", title);
+            o.put("text", text);
+            o.put("createdAt", System.currentTimeMillis());
+            FileOutputStream out = new FileOutputStream(f);
+            out.write(o.toString().getBytes(StandardCharsets.UTF_8));
+            out.close();
+        } catch (Exception ignored) {
+        }
+    }
+
+    public static List<SavedChat> chats(Context c) {
+        List<SavedChat> out = new ArrayList<>();
+        File[] files = chatsDir(c).listFiles();
+        if (files != null) {
+            for (File f : files) {
+                try {
+                    FileInputStream in = new FileInputStream(f);
+                    byte[] buf = new byte[(int) f.length()];
+                    int n = in.read(buf);
+                    in.close();
+                    JSONObject o = new JSONObject(new String(buf, 0, Math.max(n, 0), StandardCharsets.UTF_8));
+                    SavedChat sc = new SavedChat();
+                    sc.id = o.optString("id", f.getName().replace(".json", ""));
+                    sc.title = o.optString("title", "");
+                    sc.text = o.optString("text", "");
+                    sc.createdAt = o.optLong("createdAt", 0);
+                    if (sc.text.length() > 140) sc.preview = sc.text.substring(0, 140) + "…";
+                    else sc.preview = sc.text;
+                    out.add(sc);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        java.util.Collections.sort(out, (a, b) -> Long.compare(b.createdAt, a.createdAt));
+        return out;
+    }
+
+    public static void deleteChat(Context c, String id) {
+        new File(chatsDir(c), id + ".json").delete();
+    }
 }

@@ -160,4 +160,20 @@ public class RunActivity extends Activity implements Orchestrator.Callback {
             return row;
         }
     }
+
+    public void onShareReport(View v) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("\ud83d\ude80 \u062a\u0642\u0631\u064a\u0631 \u0645\u0647\u0645\u0629 \u0645\u0646 HeroesGPT\n\n");
+        sb.append("\ud83c\udfaf \u0627\u0644\u0647\u062f\u0641: ").append(run.goal).append("\n");
+        for (int i = 0; i < run.heroes.size(); i++) {
+            Hero h = run.heroes.get(i);
+            Stores.Run.Result res = run.results.get(i);
+            sb.append("\n").append(h.emoji).append(" ").append(h.name).append(":\n");
+            if (res.status == Orchestrator.STATUS_DONE) sb.append(res.output);
+            else if (res.status == Orchestrator.STATUS_FAILED) sb.append("\u26a0\ufe0f \u0641\u0634\u0644 \u2014 ").append(res.error);
+            else sb.append("\u23f3 \u0644\u0645 \u064a\u064f\u0646\u062c\u0632 \u0628\u0639\u062f");
+            sb.append("\n\n");
+        }
+        Utils.shareText(this, "HeroesGPT", sb.toString());
+    }
 }

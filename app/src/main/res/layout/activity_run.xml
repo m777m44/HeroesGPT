@@ -50,6 +50,19 @@
         android:dividerHeight="8dp" />
 
     <Button
+        android:id="@+id/share_btn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="4dp"
+        android:padding="12dp"
+        android:text="@string/share_report"
+        android:textColor="@color/text"
+        android:onClick="onShareReport"
+        android:background="@drawable/bg_card" />
+
+    <Button
         android:id="@+id/resume_btn"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

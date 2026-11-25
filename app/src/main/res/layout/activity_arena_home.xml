@@ -194,11 +194,16 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:orientation="horizontal"
+                android:orientation="vertical"
                 android:visibility="gone">
 
-                <Button
-                    android:id="@+id/vote_a"
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/vote_a"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -208,8 +213,8 @@
                     android:background="@drawable/bg_glow_button"
                     android:text="@string/vote_a" />
 
-                <Button
-                    android:id="@+id/vote_tie"
+                    <Button
+                        android:id="@+id/vote_tie"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -219,8 +224,8 @@
                     android:background="@drawable/bg_chip"
                     android:text="@string/vote_tie" />
 
-                <Button
-                    android:id="@+id/vote_bad"
+                    <Button
+                        android:id="@+id/vote_bad"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -230,8 +235,8 @@
                     android:background="@drawable/bg_chip"
                     android:text="@string/vote_bad" />
 
-                <Button
-                    android:id="@+id/vote_b"
+                    <Button
+                        android:id="@+id/vote_b"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -239,6 +244,35 @@
                     android:textColor="#FFFFFF"
                     android:background="@drawable/bg_glow_button"
                     android:text="@string/vote_b" />
+            </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="6dp">
+
+                    <Button
+                        android:id="@+id/vote_judge"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="3dp"
+                        android:textSize="11sp"
+                        android:textColor="@color/text"
+                        android:background="@drawable/bg_chip"
+                        android:text="@string/auto_judge" />
+
+                    <Button
+                        android:id="@+id/battle_share"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textSize="11sp"
+                        android:textColor="@color/text"
+                        android:background="@drawable/bg_chip"
+                        android:text="@string/share" />
+                </LinearLayout>
             </LinearLayout>
 
             <Button
@@ -292,15 +326,33 @@
             android:paddingStart="12dp"
             android:paddingEnd="12dp">
 
-            <Button
-                android:id="@+id/direct_pick"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:textSize="13sp"
-                android:textColor="@color/gold"
-                android:background="@drawable/bg_chip"
-                android:text="@string/chat_pick_hero" />
+                android:layout_marginTop="4dp"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <Button
+                                android:id="@+id/direct_pick"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="center"
+                                android:textSize="13sp"
+                                android:textColor="@color/gold"
+                                android:background="@drawable/bg_chip"
+                                android:text="@string/chat_pick_hero" />
+
+                <Button
+                                android:id="@+id/direct_save"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="8dp"
+                                android:textSize="13sp"
+                                android:textColor="@color/text"
+                                android:background="@drawable/bg_chip"
+                                android:text="@string/save_chat" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/direct_title"

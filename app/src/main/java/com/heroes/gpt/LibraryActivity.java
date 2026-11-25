@@ -3,9 +3,12 @@ package com.heroes.gpt;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -15,20 +18,15 @@ import java.util.List;
 
 public class LibraryActivity extends Activity {
 
+    private ListView lv;
+    private final List<Object> rows = new ArrayList<>();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_library);
 
-        List<Object> rows = new ArrayList<>();
-        for (String cat : HeroPresets.categories()) {
-            rows.add(cat);
-            for (HeroPresets.Preset p : HeroPresets.all()) {
-                if (p.category.equals(cat)) rows.add(p);
-            }
-        }
-
-        ListView lv = findViewById(R.id.library_list);
+        lv = findViewById(R.id.library_list);
         lv.setAdapter(new BaseAdapter() {
             @Override
             public int getCount() { return rows.size(); }
@@ -81,6 +79,37 @@ public class LibraryActivity extends Activity {
             Object o = rows.get(pos);
             if (o instanceof HeroPresets.Preset) showAddDialog((HeroPresets.Preset) o);
         });
+
+        EditText search = findViewById(R.id.library_search);
+        search.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) { }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                filter(s.toString().trim().toLowerCase());
+            }
+        });
+        filter("");
+    }
+
+    private void filter(String q) {
+        rows.clear();
+        for (String cat : HeroPresets.categories()) {
+            List<HeroPresets.Preset> matched = new ArrayList<>();
+            for (HeroPresets.Preset p : HeroPresets.all()) {
+                if (!p.category.equals(cat)) continue;
+                if (q.isEmpty() || (p.name + " " + p.system).toLowerCase().contains(q)) matched.add(p);
+            }
+            if (!matched.isEmpty()) {
+                rows.add(cat);
+                rows.addAll(matched);
+            }
+        }
+        ((BaseAdapter) lv.getAdapter()).notifyDataSetChanged();
     }
 
     private void showAddDialog(HeroPresets.Preset p) {
