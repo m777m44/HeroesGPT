@@ -27,8 +27,14 @@ public class ProvidersActivity extends Activity {
             "Hugging Face — مجاني",
             "Mistral — مجاني (La Plateforme)",
             "Cohere — تجربة مجانية",
-            "Gemini — مجاني (Google AI Studio)",
+            "Gemini — Google AI Studio",
             "OpenRouter — نماذج :free",
+            "BazaarLink — 130 نموذجًا",
+            "Together AI — 5$ رصيد مجاني",
+            "Fireworks AI — رصيد مجاني",
+            "DeepInfra — رصيد مجاني",
+            "NVIDIA NIM — تجربة مجانية",
+            "SambaNova — مجاني",
             "DeepSeek",
             "مخصص"
     };
@@ -41,6 +47,12 @@ public class ProvidersActivity extends Activity {
             "https://api.cohere.ai/compatibility/v1",
             "https://generativelanguage.googleapis.com/v1beta/openai",
             "https://openrouter.ai/api/v1",
+            "https://api.bazaarlink.ai/v1",
+            "https://api.together.xyz/v1",
+            "https://api.fireworks.ai/inference/v1",
+            "https://api.deepinfra.com/v1/openai",
+            "https://integrate.api.nvidia.com/v1",
+            "https://api.sambanova.ai/v1",
             "https://api.deepseek.com",
             ""
     };
@@ -51,12 +63,18 @@ public class ProvidersActivity extends Activity {
             "meta-llama/Llama-3.3-70B-Instruct",
             "mistral-small-latest",
             "command-r7b-12-2024",
-            "gemini-2.5-flash",
-            "deepseek/deepseek-chat-v3-0324:free",
+            "gemini-3.8-flash",
+            "google/gemma-4-31b-it:free",
+            "glm-4.7-flash",
+            "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+            "accounts/fireworks/models/llama-v3p3-70b-instruct",
+            "meta-llama/Llama-3.3-70B-Instruct",
+            "meta/llama-3.3-70b-instruct",
+            "Meta-Llama-3.3-70B-Instruct",
             "deepseek-chat",
             ""
     };
-    private static final boolean[] PRESET_NOKEY = {true, false, false, false, false, false, false, false, false, false};
+    private static final boolean[] PRESET_NOKEY = {true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false};
 
     private static final String[] PRESET_KEYURLS = {
             "https://enter.pollinations.ai/?ref=classic",
@@ -65,8 +83,14 @@ public class ProvidersActivity extends Activity {
             "https://huggingface.co/settings/tokens",
             "https://console.mistral.ai/api-keys",
             "https://dashboard.cohere.com/api-keys",
-            "https://aistudio.google.com/apikey",
-            "https://openrouter.ai/keys",
+            "https://aistudio.google.com/api-keys",
+            "https://openrouter.ai/settings/keys",
+            "https://bazaarlink.ai/keys",
+            "https://api.together.ai/settings/api-keys",
+            "https://fireworks.ai/account/api-keys",
+            "https://deepinfra.com/dash/keys",
+            "https://build.nvidia.com",
+            "https://cloud.sambanova.ai/apis",
             "https://platform.deepseek.com/api_keys",
             ""
     };

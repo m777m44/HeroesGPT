@@ -108,9 +108,16 @@ public class Stores {
                 if (p.keyUrl == null) p.keyUrl = "";
                 String u = p.keyUrl;
                 if (u.isEmpty() && b.contains("pollinations.ai")) { p.keyUrl = "https://enter.pollinations.ai/?ref=classic"; changed = true; }
-                else if (u.isEmpty() && b.contains("generativelanguage.googleapis.com")) { p.keyUrl = "https://aistudio.google.com/apikey"; changed = true; }
-                else if (u.isEmpty() && b.contains("openrouter.ai")) { p.keyUrl = "https://openrouter.ai/keys"; changed = true; }
+                else if (u.isEmpty() && b.contains("generativelanguage.googleapis.com")) { p.keyUrl = "https://aistudio.google.com/api-keys"; changed = true; }
+                else if (u.isEmpty() && b.contains("openrouter.ai")) { p.keyUrl = "https://openrouter.ai/settings/keys"; changed = true; }
                 else if (u.isEmpty() && b.contains("api.deepseek.com")) { p.keyUrl = "https://platform.deepseek.com/api_keys"; changed = true; }
+                if (b.contains("openrouter.ai") && p.model.contains("deepseek-chat-v3-0324:free")) { p.model = "google/gemma-4-31b-it:free"; changed = true; }
+                if (b.contains("generativelanguage.googleapis.com") && p.model.contains("gemini-2.5-flash")) { p.model = "gemini-3.8-flash"; changed = true; }
+            }
+            if (!hasBase(ps, "api.bazaarlink.ai")) {
+                ps.add(Provider.make("BazaarLink — 130 نموذجًا", "https://api.bazaarlink.ai/v1",
+                        "glm-4.7-flash", "", false, "https://bazaarlink.ai/keys"));
+                changed = true;
             }
             if (!hasBase(ps, "api.groq.com")) {
                 ps.add(Provider.make("Groq — مجاني فائق السرعة", "https://api.groq.com/openai/v1",
@@ -123,6 +130,16 @@ public class Stores {
                         "mistral-small-latest", "", false, "https://console.mistral.ai/api-keys"));
                 ps.add(Provider.make("Cohere — تجربة مجانية", "https://api.cohere.ai/compatibility/v1",
                         "command-r7b-12-2024", "", false, "https://dashboard.cohere.com/api-keys"));
+                ps.add(Provider.make("Together AI — 5$ رصيد مجاني", "https://api.together.xyz/v1",
+                        "meta-llama/Llama-3.3-70B-Instruct-Turbo", "", false, "https://api.together.ai/settings/api-keys"));
+                ps.add(Provider.make("Fireworks AI — رصيد مجاني", "https://api.fireworks.ai/inference/v1",
+                        "accounts/fireworks/models/llama-v3p3-70b-instruct", "", false, "https://fireworks.ai/account/api-keys"));
+                ps.add(Provider.make("DeepInfra — رصيد مجاني", "https://api.deepinfra.com/v1/openai",
+                        "meta-llama/Llama-3.3-70B-Instruct", "", false, "https://deepinfra.com/dash/keys"));
+                ps.add(Provider.make("NVIDIA NIM — تجربة مجانية", "https://integrate.api.nvidia.com/v1",
+                        "meta/llama-3.3-70b-instruct", "", false, "https://build.nvidia.com"));
+                ps.add(Provider.make("SambaNova — مجاني", "https://api.sambanova.ai/v1",
+                        "Meta-Llama-3.3-70B-Instruct", "", false, "https://cloud.sambanova.ai/apis"));
                 changed = true;
             }
             if (changed) saveProviders(c, ps);
