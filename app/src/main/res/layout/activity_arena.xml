@@ -62,7 +62,7 @@
         android:layout_marginTop="12dp"
         android:padding="14dp"
         android:text="@string/arena_go"
-        android:textColor="#1A1206"
+        android:textColor="#FFFFFF"
         android:textStyle="bold"
         android:background="@drawable/bg_glow_button" />
 

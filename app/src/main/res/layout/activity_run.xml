@@ -57,7 +57,7 @@
         android:padding="14dp"
         android:text="@string/resume"
         android:textStyle="bold"
-        android:textColor="#1A1206"
+        android:textColor="#FFFFFF"
         android:onClick="onResumeRun"
         android:background="@drawable/bg_glow_button"
         android:visibility="gone" />

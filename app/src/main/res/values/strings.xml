@@ -88,4 +88,19 @@
     <string name="tpl_learn_full">أنشئ لي مسار تعلّم كامل خطوة بخطوة: المستوى المبتدئ حتى المتقدم، الموارد الموصى بها، تمارين عملية لكل مرحلة، ومشروع نهائي.</string>
     <string name="tpl_app_full">ابنِ لي تطبيق ويب كامل يعمل فورًا بواجهة عربية RTL أنيقة، ببنية مشروع جاهزة وشرح طريقة التشغيل خطوة بخطوة. فكرة التطبيق:</string>
     <string name="tpl_content_full">اكتب لي حزمة محتوى تسويقي متكاملة لمنتجي: 3 إعلانات قصيرة، 5 منشورات وسائل تواصل، وسيناريو فيديو 60 ثانية. المنتج هو:</string>
+    <string name="tab_battle">⚔️ المعركة</string>
+    <string name="tab_direct">💬 دردشة مباشرة</string>
+    <string name="tab_ranks">🏅 لوحة الصدارة</string>
+    <string name="model_a">النموذج A</string>
+    <string name="model_b">النموذج B</string>
+    <string name="empty_chat">ابدأ معركة: اكتب سؤالاً في الأسفل وسيرد البطلان معًا…\n\nصوّت بعد الرد: A أفضل · تعادل · B أفضل · كلاهما سيئ. أسماء الأبطال تُكشف بعد التصويت فقط!</string>
+    <string name="thinking">⏳ يفكّر…</string>
+    <string name="vote_a">👍 A أفضل</string>
+    <string name="vote_tie">🤝 تعادل</string>
+    <string name="vote_bad">👎 كلاهما سيئ</string>
+    <string name="vote_b">👍 B أفضل</string>
+    <string name="new_battle">⚔️ معركة جديدة</string>
+    <string name="vote_saved">تم حفظ تصويتك وتحديث لوحة الصدارة 🏅</string>
+    <string name="arena_home_need_two">تحتاج بطلَين نشطين على الأقل في فريقك — أضفهم من قسم الفريق</string>
+    <string name="ranks_subtitle">ترتيب أبطالك بتصنيف Elo — يتحدّث مع كل تصويت (البداية 1200 نقطة)</string>
 </resources>

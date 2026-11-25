@@ -55,7 +55,7 @@
             android:paddingStart="20dp"
             android:paddingEnd="20dp"
             android:text="@string/chat_send"
-            android:textColor="#1A1206"
+            android:textColor="#FFFFFF"
             android:textStyle="bold"
             android:background="@drawable/bg_glow_button" />
     </LinearLayout>

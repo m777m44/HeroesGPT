@@ -1,7 +1,7 @@
 {
-  "versionCode": 2,
-  "versionName": "2.0",
+  "versionCode": 3,
+  "versionName": "3.0",
   "apk": "HeroesGPT.apk",
-  "notes": "مكتبة 24 بطلًا في 7 أقسام، ساحة مقارنة النماذج، دردشة مع بطل واحد، نماذج مهام جاهزة، ومحدّث داخلي بالرابط الدائمي.",
+  "notes": "واجهة Arena جديدة بالكامل: معركة أبطال مجهولة مع تصويت وكشف الأسماء، لوحة صدارة بتصنيف Elo، دردشة مباشرة، وثيم فاتح أنيق.",
   "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT.apk"
 }
