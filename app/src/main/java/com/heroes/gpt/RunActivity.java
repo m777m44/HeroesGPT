@@ -301,18 +301,21 @@ public class RunActivity extends Activity implements Orchestrator.Callback {
                 e.content = reportText();
                 files.add(e);
             }
+            String result;
             try {
-                Github.uploadAll(token, repo, files, "HeroesGPT/" + run.id, null, log);
+                String commitMsg = "HeroesGPT: " + run.goal.substring(0, Math.min(run.goal.length(), 80));
+                Github.CommitResult cr = Github.commitAll(token, repo, files,
+                        "HeroesGPT/" + run.id, commitMsg, null);
+                result = cr.log.toString().trim();
             } catch (Exception e) {
-                log.append("⚠ ").append(e.getMessage() == null ? "خطأ" : e.getMessage());
+                result = "⚠ " + (e.getMessage() == null ? "خطأ" : e.getMessage());
             }
-            final String result = log.length() == 0
-                    ? "لا توجد ملفات" : log.toString().trim();
+            final String shown = result;
             runOnUiThread(() -> {
                 dlg.dismiss();
                 new AlertDialog.Builder(this)
                         .setTitle(R.string.push_done_title)
-                        .setMessage(result)
+                        .setMessage(shown)
                         .setPositiveButton(R.string.open_repo, (d2, w2) ->
                                 Utils.openUrl(this, "https://github.com/" + repo))
                         .setNegativeButton(R.string.close, null)

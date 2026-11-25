@@ -274,7 +274,7 @@ public class GithubActivity extends Activity {
 
     private void pushRun(final String token, final String repo, final Stores.Run run) {
         busy(R.string.pushing, (dlg) -> {
-            StringBuilder log = new StringBuilder();
+            String result;
             List<Github.Entry> files = ProjectFiles.extract(run);
             if (files.isEmpty()) {
                 Github.Entry e = new Github.Entry();
@@ -288,11 +288,19 @@ public class GithubActivity extends Activity {
                 e.content = sb.toString();
                 files.add(e);
             }
-            Github.uploadAll(token, repo, files, "HeroesGPT/" + run.id, null, log);
+            try {
+                String msg = "HeroesGPT: " + run.goal.substring(0, Math.min(run.goal.length(), 80));
+                Github.CommitResult cr = Github.commitAll(token, repo, files,
+                        "HeroesGPT/" + run.id, msg, null);
+                result = cr.log.toString().trim();
+            } catch (Exception ex) {
+                result = "⚠ " + (ex.getMessage() == null ? "خطأ" : ex.getMessage());
+            }
             dlg.dismiss();
+            final String shown = result;
             runOnUiThread(() -> new AlertDialog.Builder(this)
                     .setTitle(R.string.push_done_title)
-                    .setMessage(log.toString().trim())
+                    .setMessage(shown)
                     .setPositiveButton(R.string.open_repo, (d2, w2) ->
                             Utils.openUrl(this, "https://github.com/" + repo))
                     .setNegativeButton(R.string.close, null)
