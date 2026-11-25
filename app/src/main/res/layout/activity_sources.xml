@@ -25,6 +25,17 @@
         android:textColor="@color/text_dim"
         android:textSize="12sp" />
 
+    <Button
+        android:id="@+id/open_library_btn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:text="@string/repo_library_btn"
+        android:textColor="@color/gold"
+        android:background="@drawable/bg_glow_button"
+        android:textStyle="bold" />
+
     <ListView
         android:id="@+id/sources_list"
         android:layout_width="match_parent"

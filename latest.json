@@ -1,7 +1,7 @@
 {
-  "versionCode": 14,
-  "versionName": "6.2",
+  "versionCode": 15,
+  "versionName": "6.3",
   "apk": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT.apk",
-  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v6.2.apk",
-  "notes": "v6.2 — إصلاح جذري لأخطاء الرفع إلى GitHub: خطأ 422 (Update is not a fast forward) وخطأ 500 تم حلهما نهائيًا عبر رافع جديد يعمل بتحديث واحد ذرّي واحد (Git Data API) مع إعادة محاولة تلقائية وتجاوز قسري عند التعارض. رفع جميع الملفات دفعة واحدة بنقل متوازٍ (4 خيوط) — أسرع بعدة مرات، بدون فحص أو فلترة أي ملف، بدون توقف، ويشمل الملفات الكبيرة جدًا، مع رسائل خطأ عربية واضحة وتهيئة فارغة للمستودعات الجديدة تلقائيًا."
+  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v6.3.apk",
+  "notes": "v6.3 — دمج كامل مستودع m777m44/Ai-Agents-Heroes داخل التطبيق: مكتبة 🗂 الأبطال الجديدة تضم 2172 ملفًا مصدريًا من 8 مشاريع (3mh_agent، harness-sdk بمحرك Strands، mahdi-agent-ai، raf3ly-source، Gpt-Img، copilot-Microsoft، notrack-ai، kkimi) — متصفح مجلدات أنيق، معاينة كاملة بدون تقطيع، نسخ السورس، تحميل بالامتداد الصحيح، مع فحص أمان تلقائي للمفاتيح."
 }

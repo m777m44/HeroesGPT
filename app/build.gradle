@@ -6,12 +6,16 @@ android {
     namespace 'com.heroes.gpt'
     compileSdk 34
 
+    aaptOptions {
+        ignoreAssetsPattern '!.svn:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
+    }
+
     defaultConfig {
         applicationId "com.heroes.gpt"
         minSdk 24
         targetSdk 34
-        versionCode 14
-        versionName "6.2"
+        versionCode 15
+        versionName "6.3"
     }
 
     buildTypes {

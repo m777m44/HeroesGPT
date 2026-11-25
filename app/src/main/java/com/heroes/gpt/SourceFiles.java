@@ -76,6 +76,20 @@ public class SourceFiles {
         return run == null ? new ArrayList<>() : ProjectFiles.extract(run);
     }
 
+    public static org.json.JSONArray repoProjects(Context c) {
+        try {
+            JSONObject o = new JSONObject(readAsset(c, "repos/index.json"));
+            org.json.JSONArray a = o.optJSONArray("projects");
+            return a == null ? new org.json.JSONArray() : a;
+        } catch (Exception e) {
+            return new org.json.JSONArray();
+        }
+    }
+
+    public static String repoAssetPath(String project, String relPath) {
+        return "repos/Ai_Agents_Heroes/" + project + "/" + relPath;
+    }
+
     public static List<Object[]> bundledSources(Context c) {
         List<Object[]> out = new ArrayList<>();
         try {

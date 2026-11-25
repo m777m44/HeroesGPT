@@ -26,14 +26,14 @@ public class SourcePanelActivity extends Activity {
         setContentView(R.layout.activity_source_panel);
         String mode = getIntent().getStringExtra("mode");
         final String title;
-        if ("asset".equals(mode)) {
+        if ("asset".equals(mode) || "repoasset".equals(mode)) {
             entries = new java.util.ArrayList<>();
             String name = getIntent().getStringExtra("asset_path");
             title = getIntent().getStringExtra("title");
             try {
                 Github.Entry e = new Github.Entry();
-                e.path = name;
-                e.content = SourceFiles.readAsset(this, "sources/" + name);
+                e.path = name.startsWith("repos/") ? name.substring("repos/Ai_Agents_Heroes/".length()) : name;
+                e.content = SourceFiles.readAsset(this, name);
                 entries.add(e);
             } catch (Exception ex) {
                 Toast.makeText(this, R.string.no_files_found, Toast.LENGTH_LONG).show();

@@ -240,4 +240,10 @@
     <string name="save_failed">تعذّر الحفظ — حاول مرة أخرى</string>
     <string name="saved_ok">✓ تم حفظ الملف بنجاح</string>
     <string name="sources_short">سورسات</string>
+    <string name="repo_library_title">🗂 مكتبة الأبطال</string>
+    <string name="repo_library_sub">كل ملفات مستودع Ai-Agents-Heroes مدمجة داخل التطبيق — تصفّح، معاينة كاملة، نسخ، تحميل</string>
+    <string name="repo_library_btn">🗂 مكتبة Ai-Agents-Heroes</string>
+    <string name="repo_level_sub_format">%1$d ملفًا في هذا المستوى</string>
+    <string name="repo_open_project">فتح المشروع</string>
+    <string name="repo_back">رجوع</string>
 </resources>

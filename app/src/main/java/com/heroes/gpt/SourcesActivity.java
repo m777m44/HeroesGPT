@@ -25,6 +25,8 @@ public class SourcesActivity extends Activity {
         if (items.isEmpty()) {
             Toast.makeText(this, R.string.no_files_found, Toast.LENGTH_SHORT).show();
         }
+        findViewById(R.id.open_library_btn).setOnClickListener(v ->
+                startActivity(new Intent(this, RepoLibraryActivity.class)));
         ListView lv = findViewById(R.id.sources_list);
         lv.setAdapter(new BaseAdapter() {
             @Override
