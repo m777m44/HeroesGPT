@@ -87,4 +87,34 @@ public class CockpitActivity extends Activity {
     public void onProviders(View v) {
         startActivity(new Intent(this, ProvidersActivity.class));
     }
+
+    public void onLibrary(View v) {
+        startActivity(new Intent(this, LibraryActivity.class));
+    }
+
+    public void onArena(View v) {
+        startActivity(new Intent(this, ArenaActivity.class));
+    }
+
+    public void onChat(View v) {
+        startActivity(new Intent(this, ChatActivity.class));
+    }
+
+    public void onUpdate(View v) {
+        startActivity(new Intent(this, UpdateActivity.class));
+    }
+
+    private void setTemplate(int res) {
+        EditText input = findViewById(R.id.goal);
+        input.setText(getString(res));
+        input.setSelection(input.getText().length());
+    }
+
+    public void onTemplateBiz(View v) { setTemplate(R.string.tpl_biz_full); }
+
+    public void onTemplateLearn(View v) { setTemplate(R.string.tpl_learn_full); }
+
+    public void onTemplateApp(View v) { setTemplate(R.string.tpl_app_full); }
+
+    public void onTemplateContent(View v) { setTemplate(R.string.tpl_content_full); }
 }
