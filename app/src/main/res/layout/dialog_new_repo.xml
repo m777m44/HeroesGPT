@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <EditText
+        android:id="@+id/nr_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_input"
+        android:hint="@string/gh_repo_name_hint"
+        android:textColorHint="@color/text_dim"
+        android:textColor="@color/text"
+        android:inputType="text"
+        android:padding="12dp" />
+
+    <EditText
+        android:id="@+id/nr_desc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_input"
+        android:hint="@string/gh_repo_desc_hint"
+        android:textColorHint="@color/text_dim"
+        android:textColor="@color/text"
+        android:inputType="text"
+        android:padding="12dp" />
+
+    <CheckBox
+        android:id="@+id/nr_private"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="@string/gh_private"
+        android:textColor="@color/text_dim"
+        android:buttonTint="@color/accent" />
+</LinearLayout>

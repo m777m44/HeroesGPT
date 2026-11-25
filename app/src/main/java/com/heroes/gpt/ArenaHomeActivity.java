@@ -106,6 +106,13 @@ public class ArenaHomeActivity extends Activity {
                 startActivity(new Intent(this, CockpitActivity.class)));
         findViewById(R.id.header_update).setOnClickListener(v ->
                 startActivity(new Intent(this, UpdateActivity.class)));
+        findViewById(R.id.header_github).setOnClickListener(v ->
+                startActivity(new Intent(this, GithubActivity.class)));
+
+        findViewById(R.id.mode_fast).setOnClickListener(v -> setModeUi(Orchestrator.MODE_FAST));
+        findViewById(R.id.mode_balanced).setOnClickListener(v -> setModeUi(Orchestrator.MODE_BALANCED));
+        findViewById(R.id.mode_deep).setOnClickListener(v -> setModeUi(Orchestrator.MODE_DEEP));
+        setModeUi(Orchestrator.currentMode(this));
 
         battleGo.setOnClickListener(v -> sendBattlePrompt());
         newBattleBtn.setOnClickListener(v -> startNewBattle());
@@ -140,6 +147,20 @@ public class ArenaHomeActivity extends Activity {
         tabRanks.setBackgroundResource(i == 3 ? R.drawable.bg_tab_selected : R.drawable.bg_chip);
         if (i == 3) refreshRanks();
         if (i == 0) refreshMission();
+    }
+
+    private void setModeUi(String mode) {
+        Orchestrator.setMode(this, mode);
+        int fast = R.drawable.bg_pill;
+        int on = R.drawable.bg_pill_on;
+        findViewById(R.id.mode_fast).setBackgroundResource(Orchestrator.MODE_FAST.equals(mode) ? on : fast);
+        findViewById(R.id.mode_balanced).setBackgroundResource(Orchestrator.MODE_BALANCED.equals(mode) ? on : fast);
+        findViewById(R.id.mode_deep).setBackgroundResource(Orchestrator.MODE_DEEP.equals(mode) ? on : fast);
+        int off = getColor(R.color.text);
+        int onText = 0xFFFFFFFF;
+        ((TextView) findViewById(R.id.mode_fast)).setTextColor(Orchestrator.MODE_FAST.equals(mode) ? onText : off);
+        ((TextView) findViewById(R.id.mode_balanced)).setTextColor(Orchestrator.MODE_BALANCED.equals(mode) ? onText : off);
+        ((TextView) findViewById(R.id.mode_deep)).setTextColor(Orchestrator.MODE_DEEP.equals(mode) ? onText : off);
     }
 
     @Override

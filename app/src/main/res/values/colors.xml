@@ -1,13 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#070B16</color>
-    <color name="surface">#0D1526</color>
-    <color name="surface2">#141F38</color>
-    <color name="text">#EAF2FF</color>
-    <color name="text_dim">#8CA3C7</color>
-    <color name="gold">#00E5FF</color>
-    <color name="accent">#7C4DFF</color>
-    <color name="ok">#00E676</color>
-    <color name="danger">#FF5252</color>
-    <color name="border">#1E2A4A</color>
+    <color name="bg">#121114</color>
+    <color name="surface">#1C1D21</color>
+    <color name="surface2">#26272C</color>
+    <color name="text">#F4F0EA</color>
+    <color name="text_dim">#A8A29A</color>
+    <color name="gold">#FF8A5A</color>
+    <color name="accent">#FF5D35</color>
+    <color name="accent2">#FFB38A</color>
+    <color name="ok">#3DDC84</color>
+    <color name="danger">#FF6B57</color>
+    <color name="border">#2C2E35</color>
+    <color name="live_glow">#33FF5D35</color>
 </resources>

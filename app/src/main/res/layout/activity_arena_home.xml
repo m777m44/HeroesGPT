@@ -26,6 +26,19 @@
             android:letterSpacing="0.08" />
 
         <Button
+            android:id="@+id/header_github"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:minWidth="0dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:textSize="12sp"
+            android:textColor="@color/accent2"
+            android:background="@drawable/bg_chip"
+            android:text="@string/header_github" />
+
+        <Button
             android:id="@+id/header_team"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -218,6 +231,54 @@
                         android:textColor="@color/text_dim"
                         android:background="@drawable/bg_chip"
                         android:text="@string/tpl_content" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/mission_mode_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/mode_title"
+                    style="@style/SectionTitle"
+                    android:gravity="center" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/mode_fast"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="4dp"
+                        android:textSize="12sp"
+                        android:textColor="@color/text"
+                        android:background="@drawable/bg_pill"
+                        android:text="@string/mode_fast" />
+
+                    <Button
+                        android:id="@+id/mode_balanced"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textSize="12sp"
+                        android:textColor="@color/text"
+                        android:background="@drawable/bg_pill"
+                        android:text="@string/mode_balanced" />
+
+                    <Button
+                        android:id="@+id/mode_deep"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="4dp"
+                        android:textSize="12sp"
+                        android:textColor="@color/text"
+                        android:background="@drawable/bg_pill"
+                        android:text="@string/mode_deep" />
                 </LinearLayout>
 
                 <Button

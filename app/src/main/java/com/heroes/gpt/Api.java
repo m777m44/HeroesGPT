@@ -12,11 +12,15 @@ import java.util.List;
 
 public class Api {
 
+    public interface Live {
+        void onPartial(String header, String partial);
+    }
+
     public static String chat(Provider p, String system, String userContent) throws Exception {
         Exception last = null;
         for (int attempt = 0; attempt < 3; attempt++) {
             try {
-                return chatOnce(p, system, userContent);
+                return chatOnce(p, system, userContent, false, null);
             } catch (Exception e) {
                 String m = String.valueOf(e.getMessage() == null ? "" : e.getMessage());
                 boolean httpNoRetry = m.startsWith("HTTP 401") || m.startsWith("HTTP 403")
@@ -29,6 +33,31 @@ public class Api {
             }
         }
         throw last;
+    }
+
+    public static String chatLive(Provider p, String system, String userContent, Live live)
+            throws Exception {
+        if (live == null) return chat(p, system, userContent);
+        Exception last = null;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            try {
+                return chatOnce(p, system, userContent, true, live);
+            } catch (Exception e) {
+                String m = String.valueOf(e.getMessage() == null ? "" : e.getMessage());
+                boolean httpNoRetry = m.startsWith("HTTP 401") || m.startsWith("HTTP 403")
+                        || m.startsWith("HTTP 404") || m.startsWith("HTTP 400");
+                if (!httpNoRetry) {
+                    last = m.startsWith("HTTP") ? e : new Exception(friendlyNetwork(e));
+                    if (attempt == 2) break;
+                    try { Thread.sleep(retryAfterMs(m)); } catch (InterruptedException ie) { }
+                } else {
+                    throw e;
+                }
+            }
+        }
+        last = last == null ? new Exception("فشل البث") : last;
+        if (last.getMessage() != null && last.getMessage().startsWith("HTTP")) throw last;
+        return chat(p, system, userContent);
     }
 
     private static Exception friendlyNetwork(Throwable e) {
@@ -72,7 +101,8 @@ public class Api {
         return 3000L;
     }
 
-    private static String chatOnce(Provider p, String system, String userContent) throws Exception {
+    private static String chatOnce(Provider p, String system, String userContent,
+                                   boolean stream, Live live) throws Exception {
         String base = p.base.trim();
         while (base.endsWith("/")) base = base.substring(0, base.length() - 1);
         String url = base.endsWith("/chat/completions") ? base : base + "/chat/completions";
@@ -82,6 +112,7 @@ public class Api {
 
         JSONObject body = new JSONObject();
         body.put("model", p.model.trim());
+        if (stream) body.put("stream", true);
         JSONArray msgs = new JSONArray();
         if (system != null && !system.trim().isEmpty()) {
             JSONObject s = new JSONObject();
@@ -98,10 +129,10 @@ public class Api {
         HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
         conn.setRequestMethod("POST");
         conn.setConnectTimeout(30000);
-        conn.setReadTimeout(180000);
+        conn.setReadTimeout(240000);
         conn.setDoOutput(true);
         conn.setRequestProperty("Content-Type", "application/json");
-        conn.setRequestProperty("User-Agent", "HeroesGPT/5.1 (Android)");
+        conn.setRequestProperty("User-Agent", "HeroesGPT/6.0 (Android)");
         if (isPollinations) conn.setRequestProperty("Referer", "https://github.com/m777m44/HeroesGPT");
         if (!p.noKeyNeeded && p.key != null && !p.key.trim().isEmpty()) {
             conn.setRequestProperty("Authorization", "Bearer " + p.key.trim());
@@ -116,6 +147,14 @@ public class Api {
         if (freePoll) markFreeCall();
         int code = conn.getResponseCode();
         InputStream is = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
+        String serverType = conn.getHeaderField("Content-Type");
+
+        if (stream && code < 400 && serverType != null && serverType.contains("text/event-stream")) {
+            String text = readStreaming(is, live);
+            conn.disconnect();
+            if (text.isEmpty()) throw new Exception("استجابة بث فارغة");
+            return text;
+        }
         String response = read(is);
         conn.disconnect();
 
@@ -126,15 +165,72 @@ public class Api {
         JSONObject res = new JSONObject(response);
         JSONArray choices = res.optJSONArray("choices");
         if (choices != null && choices.length() > 0) {
-            JSONObject msg = choices.getJSONObject(0).optJSONObject("message");
-            String content = msg == null ? "" : msg.optString("content", "");
-            if (!content.isEmpty()) return content;
+            String content = extractChoiceContent(choices.getJSONObject(0));
+            if (!content.isEmpty()) {
+                if (live != null) live.onPartial("", content);
+                return content;
+            }
         }
         JSONObject err = res.optJSONObject("error");
         if (err != null) {
             throw new Exception(err.optString("message", "استجابة غير متوقعة"));
         }
         throw new Exception("استجابة غير متوقعة من الخادم: " + trim(response));
+    }
+
+    private static String extractChoiceContent(JSONObject choice) {
+        JSONObject msg = choice.optJSONObject("message");
+        String content = msg == null ? "" : msg.optString("content", "");
+        if (content.isEmpty()) content = choice.optString("text", "");
+        return content;
+    }
+
+    private static final long EMIT_GAP_MS = 110L;
+
+    private static String readStreaming(InputStream is, Live live) throws Exception {
+        byte[] buf = new byte[8192];
+        StringBuilder raw = new StringBuilder();
+        StringBuilder text = new StringBuilder();
+        long lastEmit = 0;
+        int n;
+        while ((n = is.read(buf)) > 0) {
+            raw.append(new String(buf, 0, n, StandardCharsets.UTF_8));
+            int sep;
+            while ((sep = raw.indexOf("\n")) >= 0) {
+                String line = raw.substring(0, sep).trim();
+                raw.delete(0, sep + 1);
+                if (line.isEmpty() || !line.startsWith("data:")) continue;
+                String data = line.substring(5).trim();
+                if (data.equals("[DONE]")) {
+                    if (live != null && text.length() > 0) {
+                        live.onPartial("", text.toString());
+                    }
+                    is.close();
+                    return text.toString();
+                }
+                try {
+                    JSONObject o = new JSONObject(data);
+                    JSONArray choices = o.optJSONArray("choices");
+                    if (choices == null || choices.length() == 0) continue;
+                    JSONObject c0 = choices.getJSONObject(0);
+                    JSONObject delta = c0.optJSONObject("delta");
+                    if (delta != null) {
+                        text.append(delta.optString("content", ""));
+                    } else {
+                        String inline = extractChoiceContent(c0);
+                        if (!inline.isEmpty()) text.append(inline);
+                    }
+                } catch (Exception ignored) {
+                }
+                long now = System.currentTimeMillis();
+                if (live != null && text.length() > 0 && now - lastEmit > EMIT_GAP_MS) {
+                    lastEmit = now;
+                    live.onPartial("", text.toString());
+                }
+            }
+        }
+        is.close();
+        return text.toString();
     }
 
     private static String friendly(int code, String body) {
