@@ -26,6 +26,19 @@
             android:letterSpacing="0.08" />
 
         <Button
+            android:id="@+id/header_sources"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:minWidth="0dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:textSize="12sp"
+            android:textColor="@color/ok"
+            android:background="@drawable/bg_chip"
+            android:text="@string/sources_short" />
+
+        <Button
             android:id="@+id/header_github"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

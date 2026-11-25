@@ -34,6 +34,8 @@
         <activity android:name=".StatsActivity" android:exported="false" />
         <activity android:name=".ChatsActivity" android:exported="false" />
         <activity android:name=".GithubActivity" android:exported="false" />
+        <activity android:name=".SourcesActivity" android:exported="false" />
+        <activity android:name=".SourcePanelActivity" android:exported="false" />
 
         <provider
             android:name=".ApkProvider"

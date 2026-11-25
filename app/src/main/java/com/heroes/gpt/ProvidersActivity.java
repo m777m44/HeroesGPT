@@ -104,6 +104,64 @@ public class ProvidersActivity extends Activity {
         ((ListView) findViewById(R.id.provider_list)).setAdapter(adapter);
     }
 
+    public void onQuickImport(View v) {
+        View box = LayoutInflater.from(this).inflate(R.layout.dialog_quick_keys, null);
+        final EditText input = box.findViewById(R.id.qk_input);
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.qk_title)
+                .setMessage(R.string.qk_msg)
+                .setView(box)
+                .setPositiveButton(R.string.qk_apply, (d, w) -> {
+                    String text = input.getText().toString();
+                    int n = applyKeys(text);
+                    if (n == 0) {
+                        Toast.makeText(this, R.string.qk_none, Toast.LENGTH_LONG).show();
+                    } else {
+                        Stores.saveProviders(this, providers);
+                        adapter.notifyDataSetChanged();
+                        Toast.makeText(this, getString(R.string.qk_done, n),
+                                Toast.LENGTH_LONG).show();
+                    }
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    private String findProviderBase(String part) {
+        for (Provider p : providers) {
+            if (p.base != null && p.base.contains(part)) return p.id;
+        }
+        return null;
+    }
+
+    private int applyKeys(String text) {
+        int count = 0;
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("[A-Za-z0-9_\\.\\-]{20,}").matcher(text);
+        while (m.find()) {
+            String t = m.group().trim();
+            String target = null;
+            if (t.startsWith("sk-or-v1")) target = findProviderBase("openrouter.ai");
+            else if (t.startsWith("sk-bl")) target = findProviderBase("bazaarlink.ai");
+            else if (t.startsWith("sk_") || t.startsWith("sk-")) target = findProviderBase("pollinations.ai");
+            else if (t.startsWith("AQ.")) target = findProviderBase("generativelanguage");
+            else if (t.startsWith("AIzaSy")) target = findProviderBase("generativelanguage");
+            else if (t.startsWith("gsk_")) target = findProviderBase("groq.com");
+            else if (t.startsWith("hf_")) target = findProviderBase("huggingface");
+            else continue;
+            if (target == null) continue;
+            for (Provider p : providers) {
+                if (p.id.equals(target)) {
+                    p.key = t;
+                    p.enabled = true;
+                    count++;
+                    break;
+                }
+            }
+        }
+        return count;
+    }
+
     public void onAddProvider(View v) {
         new AlertDialog.Builder(this)
                 .setTitle(R.string.choose_preset)

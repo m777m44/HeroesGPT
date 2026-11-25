@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <EditText
+        android:id="@+id/qk_input"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:background="@drawable/bg_input"
+        android:fontFamily="monospace"
+        android:gravity="top"
+        android:hint="sk-or-v1-…&#10;sk-bl-…&#10;sk_…&#10;AQ.…"
+        android:inputType="textMultiLine"
+        android:minHeight="140dp"
+        android:padding="12dp"
+        android:textColor="@color/text"
+        android:textColorHint="@color/text_dim" />
+</ScrollView>

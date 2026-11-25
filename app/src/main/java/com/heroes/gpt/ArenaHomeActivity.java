@@ -108,6 +108,8 @@ public class ArenaHomeActivity extends Activity {
                 startActivity(new Intent(this, UpdateActivity.class)));
         findViewById(R.id.header_github).setOnClickListener(v ->
                 startActivity(new Intent(this, GithubActivity.class)));
+        findViewById(R.id.header_sources).setOnClickListener(v ->
+                startActivity(new Intent(this, SourcesActivity.class)));
 
         findViewById(R.id.mode_fast).setOnClickListener(v -> setModeUi(Orchestrator.MODE_FAST));
         findViewById(R.id.mode_balanced).setOnClickListener(v -> setModeUi(Orchestrator.MODE_BALANCED));

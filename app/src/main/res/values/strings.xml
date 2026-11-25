@@ -221,4 +221,23 @@
     <string name="gh_build_msg">سيُشغَّل ملف apk-build.yml في المستودع %1$s على GitHub Actions وسيُبنى APK في تبويب Actions. يتطلب أن يحتوي المستودع على مشروع أندرويد وسير apk-build.yml.</string>
     <string name="gh_build_started">⚙️ انطلق البناء — تابع تقدمه من تبويب Actions في مستودعك</string>
     <string name="gh_error_title">رسالة من GitHub</string>
+    <string name="qk_title">لصق سريع للمفاتيح</string>
+    <string name="qk_title_short">⚡ لصق سريع لكل المفاتيح</string>
+    <string name="qk_msg">الصق مفاتيحك دفعة واحدة (كل مفتاح بسطر). سيتعرف التطبيق تلقائيًا على نوع كل مفتاح من بدايته (sk-or-v1 ← OpenRouter، sk-bl ← BazaarLink، sk_ ← Pollinations، AQ. ← Gemini، gsk_ ← Groq، hf_ ← HuggingFace) وربطه بمصدره وتشغيله فورًا — وتبقى مخزنة في هاتفك فقط.</string>
+    <string name="qk_apply">تطبيق</string>
+    <string name="qk_none">لم يُتعرّف على أي مفتاح — تأكد من الصق كامل المفتاح في كل سطر</string>
+    <string name="qk_done">✓ تم تثبيت %1$d مفتاحًا في مصادرها وتشغيلها</string>
+    <string name="sources_title">📚 السورسات المدمجة</string>
+    <string name="sources_sub">20 سورس بايثون يعمل كسلسلة متكاملة — اضغط أي سورس لمعاينته ونسخه وتحميله</string>
+    <string name="source_panel_title">لوحة السورس</string>
+    <string name="source_panel_sub">اضغط أي ملف لعرضه بالكامل وبدون تقطيع — %1$d ملفًا</string>
+    <string name="download_short">⬇ تحميل</string>
+    <string name="save_file_title">اسم الملف</string>
+    <string name="save_name_hint">اسم الملف مع الامتداد التلقائي حسب اللغة</string>
+    <string name="save_ext_hint">سيُضاف الامتداد %1$s تلقائيًا حسب لغة الملف إن لم تكتبه</string>
+    <string name="save_ext_fixed">تم تعديل الامتداد إلى %1$s حسب لغة الملف</string>
+    <string name="save_failed_picker">لم يتوفر منتقي الملفات على هذا الجهاز — استخدم زر النسخ</string>
+    <string name="save_failed">تعذّر الحفظ — حاول مرة أخرى</string>
+    <string name="saved_ok">✓ تم حفظ الملف بنجاح</string>
+    <string name="sources_short">سورسات</string>
 </resources>

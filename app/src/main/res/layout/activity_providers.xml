@@ -37,6 +37,18 @@
     <Button
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:padding="12dp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:text="@string/qk_title_short"
+        android:onClick="onQuickImport"
+        android:background="@drawable/bg_glow_button" />
+
+    <Button
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:layout_margin="16dp"
         android:text="@string/add_provider"
         android:onClick="onAddProvider"

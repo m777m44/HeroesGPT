@@ -258,34 +258,10 @@ public class RunActivity extends Activity implements Orchestrator.Callback {
     }
 
     public void onShowFiles(View v) {
-        List<Github.Entry> files = ProjectFiles.extract(run);
-        if (files.isEmpty()) {
-            Toast.makeText(this, R.string.no_files_found, Toast.LENGTH_LONG).show();
-            return;
-        }
-        String[] names = new String[files.size()];
-        for (int i = 0; i < files.size(); i++) names[i] = files.get(i).path;
-        new AlertDialog.Builder(this)
-                .setTitle(getString(R.string.project_files_title, files.size()))
-                .setItems(names, (d, w) -> showFile(files.get(w)))
-                .setNegativeButton(R.string.close, null)
-                .show();
-    }
-
-    private void showFile(final Github.Entry f) {
-        View box = getLayoutInflater().inflate(R.layout.dialog_file_view, null);
-        TextView path = box.findViewById(R.id.file_path);
-        TextView body = box.findViewById(R.id.file_body);
-        path.setText(f.path);
-        body.setText(f.content);
-        new AlertDialog.Builder(this)
-                .setView(box)
-                .setPositiveButton(R.string.copy, (d, w) -> {
-                    Utils.copy(this, f.content);
-                    Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton(R.string.close, null)
-                .show();
+        Intent i = new Intent(this, SourcePanelActivity.class);
+        i.putExtra("mode", "run");
+        i.putExtra("run_id", run.id);
+        startActivity(i);
     }
 
     public void onPushGithub(View v) {

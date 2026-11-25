@@ -1,0 +1,104 @@
+{
+ "items": [
+  {
+   "file": "01_telegram_quran_bot.py",
+   "title": "بوت تيليجرام — قرآن ومحتوى",
+   "size": 4210
+  },
+  {
+   "file": "02_ad_clicker_bot.py",
+   "title": "بوت إعلانات ونقرات",
+   "size": 2018
+  },
+  {
+   "file": "03_chat_pure_lite.py",
+   "title": "دردشة ذكاء اصطناعي — نسخة خفيفة",
+   "size": 2271
+  },
+  {
+   "file": "04_ai_assistant_v7.py",
+   "title": "مساعد ذكي — الإصدار 7",
+   "size": 7061
+  },
+  {
+   "file": "05_worm_gpt_chat.py",
+   "title": "محرك دردشة متعدد الوضعيات",
+   "size": 5758
+  },
+  {
+   "file": "06_claude_search_client.py",
+   "title": "عميل بحث وذكاء متقدم",
+   "size": 3931
+  },
+  {
+   "file": "07_grammarly_chat.py",
+   "title": "دردشة تصحيح لغوي",
+   "size": 5981
+  },
+  {
+   "file": "08_video_tools.py",
+   "title": "أدوات معالجة فيديو",
+   "size": 10116
+  },
+  {
+   "file": "09_vps_manager.py",
+   "title": "مدير خوادم VPS",
+   "size": 11508
+  },
+  {
+   "file": "10_chattide_billing_bot.py",
+   "title": "بوت فواتير Chattide",
+   "size": 5198
+  },
+  {
+   "file": "11_chattide_main_bot.py",
+   "title": "البوت الرئيسي Chattide",
+   "size": 5198
+  },
+  {
+   "file": "12_ai_assistant_v4.py",
+   "title": "مساعد ذكي — الإصدار 4",
+   "size": 8714
+  },
+  {
+   "file": "13_ai_assistant_v5.py",
+   "title": "مساعد ذكي — الإصدار 5",
+   "size": 12611
+  },
+  {
+   "file": "14_ai_engine.py",
+   "title": "محرك ذكاء اصطناعي عام",
+   "size": 11607
+  },
+  {
+   "file": "15_ai_assistant_v7b.py",
+   "title": "مساعد ذكي — إصدار 7 ب",
+   "size": 7061
+  },
+  {
+   "file": "16_deepseek_power.py",
+   "title": "قوة DeepSeek الكاملة",
+   "size": 38580
+  },
+  {
+   "file": "17_begamob_ai.py",
+   "title": "Begamob AI",
+   "size": 6834
+  },
+  {
+   "file": "18_chat_pure_full.py",
+   "title": "دردشة ذكية كاملة",
+   "size": 2271
+  },
+  {
+   "file": "19_bot_service.py",
+   "title": "خدمة بوت شاملة",
+   "size": 17515
+  },
+  {
+   "file": "20_overchat_bot.py",
+   "title": "OverChat — البوت الضخم المتكامل",
+   "size": 96327
+  }
+ ]
+}
