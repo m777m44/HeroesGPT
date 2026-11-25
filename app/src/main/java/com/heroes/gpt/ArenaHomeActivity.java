@@ -29,6 +29,7 @@ public class ArenaHomeActivity extends Activity {
     private final Random rnd = new Random();
 
     private ViewFlipper flipper;
+    private Button tabMission;
     private Button tabBattle;
     private Button tabChat;
     private Button tabRanks;
@@ -54,6 +55,7 @@ public class ArenaHomeActivity extends Activity {
     private boolean chatBusy;
 
     private ListView ranksList;
+    private EditText missionInput;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,6 +74,7 @@ public class ArenaHomeActivity extends Activity {
         setContentView(R.layout.activity_arena_home);
 
         flipper = findViewById(R.id.flipper);
+        tabMission = findViewById(R.id.tab_mission);
         tabBattle = findViewById(R.id.tab_battle);
         tabChat = findViewById(R.id.tab_chat);
         tabRanks = findViewById(R.id.tab_ranks);
@@ -86,10 +89,18 @@ public class ArenaHomeActivity extends Activity {
         chatOut = findViewById(R.id.direct_out);
         chatTitle = findViewById(R.id.direct_title);
         ranksList = findViewById(R.id.ranks_list);
+        missionInput = findViewById(R.id.mission_input);
 
-        tabBattle.setOnClickListener(v -> switchTab(0));
-        tabChat.setOnClickListener(v -> switchTab(1));
-        tabRanks.setOnClickListener(v -> switchTab(2));
+        tabMission.setOnClickListener(v -> switchTab(0));
+        tabBattle.setOnClickListener(v -> switchTab(1));
+        tabChat.setOnClickListener(v -> switchTab(2));
+        tabRanks.setOnClickListener(v -> switchTab(3));
+        findViewById(R.id.mission_launch).setOnClickListener(v -> onLaunchMission());
+        findViewById(R.id.mission_status).setOnClickListener(v -> openLatestMission());
+        findViewById(R.id.m_tpl_biz).setOnClickListener(v -> setMissionText(R.string.tpl_biz_full));
+        findViewById(R.id.m_tpl_learn).setOnClickListener(v -> setMissionText(R.string.tpl_learn_full));
+        findViewById(R.id.m_tpl_app).setOnClickListener(v -> setMissionText(R.string.tpl_app_full));
+        findViewById(R.id.m_tpl_content).setOnClickListener(v -> setMissionText(R.string.tpl_content_full));
 
         findViewById(R.id.header_team).setOnClickListener(v ->
                 startActivity(new Intent(this, CockpitActivity.class)));
@@ -122,10 +133,73 @@ public class ArenaHomeActivity extends Activity {
 
     private void switchTab(int i) {
         flipper.setDisplayedChild(i);
-        tabBattle.setBackgroundResource(i == 0 ? R.drawable.bg_tab_selected : R.drawable.bg_chip);
-        tabChat.setBackgroundResource(i == 1 ? R.drawable.bg_tab_selected : R.drawable.bg_chip);
-        tabRanks.setBackgroundResource(i == 2 ? R.drawable.bg_tab_selected : R.drawable.bg_chip);
-        if (i == 2) refreshRanks();
+        tabMission.setBackgroundResource(i == 0 ? R.drawable.bg_tab_selected : R.drawable.bg_chip);
+        tabBattle.setBackgroundResource(i == 1 ? R.drawable.bg_tab_selected : R.drawable.bg_chip);
+        tabChat.setBackgroundResource(i == 2 ? R.drawable.bg_tab_selected : R.drawable.bg_chip);
+        tabRanks.setBackgroundResource(i == 3 ? R.drawable.bg_tab_selected : R.drawable.bg_chip);
+        if (i == 3) refreshRanks();
+        if (i == 0) refreshMission();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshMission();
+    }
+
+    private void onLaunchMission() {
+        String goal = missionInput.getText().toString().trim();
+        if (goal.isEmpty()) {
+            Toast.makeText(this, R.string.enter_goal, Toast.LENGTH_LONG).show();
+            return;
+        }
+        Stores.Run run = Stores.newRun(this, goal, Stores.heroes(this));
+        Stats.inc(this, Stats.RUNS);
+        missionInput.setText("");
+        Intent i = new Intent(this, RunActivity.class);
+        i.putExtra("run_id", run.id);
+        i.putExtra("autostart", true);
+        startActivity(i);
+    }
+
+    private void openLatestMission() {
+        List<Stores.Run> runs = Stores.runs(this);
+        if (runs.isEmpty()) return;
+        Intent i = new Intent(this, RunActivity.class);
+        i.putExtra("run_id", runs.get(0).id);
+        startActivity(i);
+    }
+
+    private void setMissionText(int res) {
+        missionInput.setText(getString(res));
+        missionInput.setSelection(missionInput.getText().length());
+    }
+
+    private void refreshMission() {
+        TextView team = findViewById(R.id.mission_team_show);
+        if (team != null) {
+            StringBuilder sb = new StringBuilder();
+            int n = 0;
+            for (Hero h : Stores.heroes(this)) {
+                if (!h.enabled) continue;
+                sb.append(h.emoji).append(" ").append(h.name);
+                n++;
+                if (n < 12) sb.append("   ·   ");
+            }
+            team.setText(n == 0 ? getString(R.string.arena_home_need_two) : sb.toString().trim());
+        }
+        TextView st = findViewById(R.id.mission_status);
+        if (st == null) return;
+        List<Stores.Run> runs = Stores.runs(this);
+        if (runs.isEmpty()) {
+            st.setText(R.string.mission_status_none);
+        } else {
+            Stores.Run r = runs.get(0);
+            String hero = r.stage < r.heroes.size()
+                    ? r.heroes.get(Math.min(r.stage, r.heroes.size() - 1)).name
+                    : "تم التسليم ✓";
+            st.setText(getString(R.string.latest_run, r.goal, r.stage, r.heroes.size(), hero));
+        }
     }
 
     private void startNewBattle() {
@@ -174,14 +248,15 @@ public class ArenaHomeActivity extends Activity {
         outB.setText(R.string.thinking);
         final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(2);
         final List<Provider> usable = usableProviders();
-        final Provider pa = usable.isEmpty() ? null : usable.get(rnd.nextInt(usable.size()));
-        final Provider pb = usable.isEmpty() ? null : usable.get(rnd.nextInt(usable.size()));
+        final int size = usable.size();
+        final int ia = size == 0 ? 0 : rnd.nextInt(size);
+        final int ib = size == 0 ? 0 : (ia + 1 + (size > 1 ? rnd.nextInt(size - 1) : 0)) % size;
+        final List<Provider> orderA = orderedFrom(usable, ia);
+        final List<Provider> orderB = orderedFrom(usable, ib);
         new Thread(() -> {
             try {
-                if (pa != null) {
-                    String res = Api.chat(pa, heroA.system, text);
-                    convoA.add(new String[]{"assistant", res});
-                }
+                String res = chatFirstOk(orderA, heroA.system, text);
+                convoA.add(new String[]{"assistant", res});
             } catch (Exception e) {
                 convoA.add(new String[]{"assistant", "⚠️ " + safeErr(e)});
             }
@@ -192,10 +267,8 @@ public class ArenaHomeActivity extends Activity {
         }).start();
         new Thread(() -> {
             try {
-                if (pb != null) {
-                    String res = Api.chat(pb, heroB.system, text);
-                    convoB.add(new String[]{"assistant", res});
-                }
+                String res = chatFirstOk(orderB, heroB.system, text);
+                convoB.add(new String[]{"assistant", res});
             } catch (Exception e) {
                 convoB.add(new String[]{"assistant", "⚠️ " + safeErr(e)});
             }
@@ -334,6 +407,25 @@ public class ArenaHomeActivity extends Activity {
                 return "فوز " + row[2] + " · تعادل " + row[4] + " · خسارة " + row[3];
             }
         });
+    }
+
+
+    private List<Provider> orderedFrom(List<Provider> usable, int start) {
+        List<Provider> out = new ArrayList<>();
+        for (int k = 0; k < usable.size(); k++) out.add(usable.get((start + k) % usable.size()));
+        return out;
+    }
+
+    private String chatFirstOk(List<Provider> order, String system, String text) throws Exception {
+        Exception last = null;
+        for (Provider p : order) {
+            try {
+                return Api.chat(p, system, text);
+            } catch (Exception e) {
+                last = e;
+            }
+        }
+        throw last != null ? last : new IllegalStateException("no provider");
     }
 
     private void pickBattleHero(final boolean slotA) {
