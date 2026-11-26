@@ -103,6 +103,9 @@ public class Api {
 
     private static String chatOnce(Provider p, String system, String userContent,
                                    boolean stream, Live live) throws Exception {
+        if ("simple".equalsIgnoreCase(p.kind == null ? "" : p.kind)) {
+            return simpleChat(p, system, userContent, live);
+        }
         String base = p.base.trim();
         while (base.endsWith("/")) base = base.substring(0, base.length() - 1);
         String url = base.endsWith("/chat/completions") ? base : base + "/chat/completions";
@@ -176,6 +179,37 @@ public class Api {
             throw new Exception(err.optString("message", "استجابة غير متوقعة"));
         }
         throw new Exception("استجابة غير متوقعة من الخادم: " + trim(response));
+    }
+
+    private static String simpleChat(Provider p, String system, String userContent,
+                                     Live live) throws Exception {
+        String prompt = (system == null || system.trim().isEmpty() ? ""
+                : system.trim() + "\n\n") + userContent;
+        String url = p.base.trim();
+        while (url.endsWith("/")) url = url.substring(0, url.length() - 1);
+        url += "?prompt=" + java.net.URLEncoder.encode(prompt, "UTF-8");
+
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        conn.setRequestMethod("GET");
+        conn.setConnectTimeout(30000);
+        conn.setReadTimeout(240000);
+        conn.setRequestProperty("User-Agent", "HeroesGPT/6.0 (Android)");
+        int code = conn.getResponseCode();
+        String response = read(code >= 400 ? conn.getErrorStream() : conn.getInputStream());
+        conn.disconnect();
+        if (code >= 400) throw new Exception(friendly(code, response));
+
+        String reply = response.trim();
+        if (reply.startsWith("{")) {
+            try {
+                JSONObject res = new JSONObject(response);
+                String r = res.optString("reply", "");
+                if (!r.isEmpty()) reply = r;
+            } catch (Exception ignored) { }
+        }
+        if (reply.isEmpty()) throw new Exception("استجابة فارغة من المصدر المبسّط");
+        if (live != null) live.onPartial("", reply);
+        return reply;
     }
 
     private static String extractChoiceContent(JSONObject choice) {

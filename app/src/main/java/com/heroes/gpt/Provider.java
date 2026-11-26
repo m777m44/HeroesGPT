@@ -11,6 +11,7 @@ public class Provider {
     public boolean enabled = true;
     public boolean noKeyNeeded = false;
     public String keyUrl = "";
+    public String kind = "openai";
 
     public JSONObject toJson() throws Exception {
         JSONObject o = new JSONObject();
@@ -22,6 +23,7 @@ public class Provider {
         o.put("enabled", enabled);
         o.put("noKeyNeeded", noKeyNeeded);
         o.put("keyUrl", keyUrl == null ? "" : keyUrl);
+        o.put("kind", kind == null || kind.isEmpty() ? "openai" : kind);
         return o;
     }
 
@@ -35,11 +37,19 @@ public class Provider {
         p.enabled = o.optBoolean("enabled", true);
         p.noKeyNeeded = o.optBoolean("noKeyNeeded", false);
         p.keyUrl = o.optString("keyUrl", "");
+        p.kind = o.optString("kind", "openai");
+        if (p.kind.isEmpty()) p.kind = "openai";
         return p;
     }
 
     public static Provider make(String name, String base, String model, String key, boolean noKeyNeeded) {
         return make(name, base, model, key, noKeyNeeded, "");
+    }
+
+    public static Provider makeSimple(String name, String base) {
+        Provider p = make(name, base, "", "", true);
+        p.kind = "simple";
+        return p;
     }
 
     public static Provider make(String name, String base, String model, String key,

@@ -1,7 +1,7 @@
 {
-  "versionCode": 15,
-  "versionName": "6.3",
+  "versionCode": 16,
+  "versionName": "6.4",
   "apk": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT.apk",
-  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v6.3.apk",
-  "notes": "v6.3 — دمج كامل مستودع m777m44/Ai-Agents-Heroes داخل التطبيق: مكتبة 🗂 الأبطال الجديدة تضم 2172 ملفًا مصدريًا من 8 مشاريع (3mh_agent، harness-sdk بمحرك Strands، mahdi-agent-ai، raf3ly-source، Gpt-Img، copilot-Microsoft، notrack-ai، kkimi) — متصفح مجلدات أنيق، معاينة كاملة بدون تقطيع، نسخ السورس، تحميل بالامتداد الصحيح، مع فحص أمان تلقائي للمفاتيح."
+  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v6.4.apk",
+  "notes": "v6.4 — توسعة الفريق بمصادر مجانية جديدة بلا مفاتيح وبلا حدود للطلبات: إضافة Heroes Free GPT (GPT-4o وGPT-5.6 عبر واجهة متوافقة مع OpenAI مع بث حي)، وقناة Pollinations Mistral إضافية للتدوير، ودمج واجهة apigpt6 البسيطة (prompt → reply) مع إعادة محاولة تلقائية. المصادر الجديدة تنضم لفريق الأبطال تلقائيًا — كل واحد يكمل الثاني: إذا تعطّل مصدر يتابع التالي فورًا حتى تكتمل المهمة."
 }

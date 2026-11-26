@@ -119,6 +119,20 @@ public class Stores {
                         "glm-4.7-flash", "", false, "https://bazaarlink.ai/keys"));
                 changed = true;
             }
+            if (!hasBase(ps, "chatgpt-proxy-chi-five")) {
+                ps.add(Provider.make("Heroes Free GPT — مجاني بلا مفتاح (GPT-4o)",
+                        "https://chatgpt-proxy-chi-five.vercel.app/v1", "gpt-4o", "", true));
+                ps.add(Provider.make("Heroes Free GPT Pro — مجاني بلا مفتاح (GPT-5.6)",
+                        "https://chatgpt-proxy-chi-five.vercel.app/v1", "gpt-5-6", "", true));
+                ps.add(Provider.make("Pollinations Mistral — مجاني بلا مفتاح",
+                        "https://text.pollinations.ai/openai", "mistral", "", true));
+                changed = true;
+            }
+            if (!hasBase(ps, "apigpt6")) {
+                ps.add(Provider.makeSimple("apigpt6 — مجاني بلا مفتاح",
+                        "https://apigpt6.vercel.app"));
+                changed = true;
+            }
             if (!hasBase(ps, "api.groq.com")) {
                 ps.add(Provider.make("Groq — مجاني فائق السرعة", "https://api.groq.com/openai/v1",
                         "llama-3.3-70b-versatile", "", false, "https://console.groq.com/keys"));
