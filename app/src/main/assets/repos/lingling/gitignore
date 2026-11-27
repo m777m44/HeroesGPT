@@ -1,0 +1,23 @@
+# Local state
+data/
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Build
+build/
+dist/
+
+# System
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

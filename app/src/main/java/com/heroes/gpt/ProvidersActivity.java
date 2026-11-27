@@ -35,6 +35,8 @@ public class ProvidersActivity extends Activity {
             "DeepInfra — رصيد مجاني",
             "NVIDIA NIM — تجربة مجانية",
             "SambaNova — مجاني",
+            "OpenCode Zen — Nemotron 3.5 مجاني",
+            "OpenCode Zen — Big Pickle مجاني",
             "DeepSeek",
             "مخصص"
     };
@@ -53,6 +55,8 @@ public class ProvidersActivity extends Activity {
             "https://api.deepinfra.com/v1/openai",
             "https://integrate.api.nvidia.com/v1",
             "https://api.sambanova.ai/v1",
+            "https://opencode.ai/zen/v1",
+            "https://opencode.ai/zen/v1",
             "https://api.deepseek.com",
             ""
     };
@@ -71,10 +75,12 @@ public class ProvidersActivity extends Activity {
             "meta-llama/Llama-3.3-70B-Instruct",
             "meta/llama-3.3-70b-instruct",
             "Meta-Llama-3.3-70B-Instruct",
+            "nemotron-3.5-super-vl-free",
+            "big-pickle",
             "deepseek-chat",
             ""
     };
-    private static final boolean[] PRESET_NOKEY = {true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false};
+    private static final boolean[] PRESET_NOKEY = {true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false};
 
     private static final String[] PRESET_KEYURLS = {
             "https://enter.pollinations.ai/?ref=classic",
@@ -91,6 +97,8 @@ public class ProvidersActivity extends Activity {
             "https://deepinfra.com/dash/keys",
             "https://build.nvidia.com",
             "https://cloud.sambanova.ai/apis",
+            "https://opencode.ai/auth",
+            "https://opencode.ai/auth",
             "https://platform.deepseek.com/api_keys",
             ""
     };
