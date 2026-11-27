@@ -112,6 +112,7 @@ public class SourcePanelActivity extends Activity {
         name.setText(suggested);
 
         findViewById(R.id.sp_full_back).setOnClickListener(v -> closeFullscreen());
+        findViewById(R.id.sp_full_run).setOnClickListener(v -> runScript(e));
         findViewById(R.id.sp_full_copy).setOnClickListener(v -> {
             Utils.copy(this, e.content);
             Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show();
@@ -123,6 +124,29 @@ public class SourcePanelActivity extends Activity {
         findViewById(R.id.sp_fullscreen).setVisibility(View.GONE);
         findViewById(R.id.sp_panel).setVisibility(View.VISIBLE);
         openIndex = -1;
+    }
+
+    private void runScript(Github.Entry e) {
+        try {
+            String ext = detectLangFromPath(e.path);
+            if (ext.startsWith(".")) ext = ext.substring(1);
+            if (ext.isEmpty()) {
+                String c = e.content == null ? "" : e.content.trim();
+                if (c.startsWith("#!") || c.contains("\necho ")) ext = "sh";
+                else if (c.startsWith("<!DOCTYPE") || c.startsWith("<html") || c.startsWith("<HTML")) ext = "html";
+            }
+            java.io.File f = new java.io.File(getCacheDir(), "hero_script.code");
+            java.io.FileOutputStream fo = new java.io.FileOutputStream(f);
+            fo.write((e.content == null ? "" : e.content).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            fo.close();
+            android.content.Intent i = new android.content.Intent(this, ScriptRunnerActivity.class);
+            i.putExtra("code_file", f.getAbsolutePath());
+            i.putExtra("title", e.path);
+            i.putExtra("ext", ext);
+            startActivity(i);
+        } catch (Exception ex) {
+            Toast.makeText(this, "⚠ " + ex.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     private String pendingName;

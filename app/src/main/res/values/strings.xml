@@ -256,4 +256,6 @@
     <string name="vault_restore">⬇️ استعادة من الخزنة</string>
     <string name="vault_uploading">جارٍ تشفير ورفع الخزنة…</string>
     <string name="vault_restoring">جارٍ فك التشفير والاستعادة…</string>
+    <string name="run_script_btn">▶ تشغيل</string>
+    <string name="run_script_hint">تشغيل السكربت بعد اكتمال برمجته</string>
 </resources>

@@ -1,7 +1,7 @@
 {
-  "versionCode": 20,
-  "versionName": "6.8",
+  "versionCode": 21,
+  "versionName": "6.9",
   "apk": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT.apk",
-  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v6.8.apk",
-  "notes": "v6.8 — الدمج الشامل الكامل: الآن 77 مشروعًا من NousResearch (كل المستودعات غير المتفرعة — 51 مستودعًا جديدًا: كل إضافات hermes-plugin وhermes-foundry وllm-chain وlm-eval-harness وhuskyholdem-bench وObsidian وnomos وغيرها) + إصلاح جذري لانهيار مكتبة الأبطال (ArrayIndexOutOfBounds عند فتح مشروع). 22,877 ملفًا معرفيًا (171 ميجابايت) داخل التطبيق. مثبت على النسخة السابقة مباشرة دون حذف."
+  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v6.9.apk",
+  "notes": "v6.9 — مشغّل السكربتات ▶: بعد اكتمال برمجة أي سكربت من فريق الأبطال، افتحه من ملفات المشروع واضغط زر التشغيل ▶ — صفحات HTML تعمل حيًا داخل التطبيق، وسكربتات JS تُنفَّذ مع التقاط رسائل console، وسكربتات Shell تُنفَّذ عبر مفسّر النظام مع مهلة أمان 15 ثانية. معاينة كاملة بلا تقطيع + مخرجات مباشرة قابلة للنسخ. بقية اللغات: معاينة ونسخ وتنزيل."
 }

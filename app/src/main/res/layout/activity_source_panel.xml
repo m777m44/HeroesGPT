@@ -87,6 +87,16 @@
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/sp_full_run"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:text="▶"
+                android:textColor="@color/ok"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
                 android:id="@+id/sp_full_copy"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

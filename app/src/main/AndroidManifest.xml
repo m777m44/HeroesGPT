@@ -37,6 +37,8 @@
         <activity android:name=".SourcesActivity" android:exported="false" />
         <activity android:name=".RepoLibraryActivity" android:exported="false" />
         <activity android:name=".SourcePanelActivity" android:exported="false" />
+        <activity android:name=".ScriptRunnerActivity" android:exported="false"
+            android:hardwareAccelerated="true" />
 
         <provider
             android:name=".ApkProvider"
