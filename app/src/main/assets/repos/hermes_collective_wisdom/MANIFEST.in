@@ -1,0 +1,11 @@
+include plugin.yaml __init__.py README.md LICENSE SECURITY.md AGENTS.md CONTRIBUTING.md
+include after-install.md
+recursive-include docs *.md
+recursive-include tests *.py
+recursive-include tests/desktop *.mjs
+include desktop/plugin.js
+include package.json package-lock.json
+include dashboard/manifest.json dashboard/plugin_api.py
+include scripts/check_complexity.py scripts/install_complexity_hook.py scripts/complexity-baseline.json
+include .pre-commit-config.yaml
+include scripts/run_receipt_mutations.py

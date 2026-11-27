@@ -32,7 +32,7 @@ public class SourcePanelActivity extends Activity {
             title = getIntent().getStringExtra("title");
             try {
                 Github.Entry e = new Github.Entry();
-                e.path = name.startsWith("repos/") ? name.substring("repos/Ai_Agents_Heroes/".length()) : name;
+                e.path = name.startsWith("repos/") ? name.substring("repos/".length()) : name;
                 e.content = SourceFiles.readAsset(this, name);
                 entries.add(e);
             } catch (Exception ex) {

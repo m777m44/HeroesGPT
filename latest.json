@@ -1,7 +1,7 @@
 {
-  "versionCode": 16,
-  "versionName": "6.4",
+  "versionCode": 17,
+  "versionName": "6.5",
   "apk": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT.apk",
-  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v6.4.apk",
-  "notes": "v6.4 — توسعة الفريق بمصادر مجانية جديدة بلا مفاتيح وبلا حدود للطلبات: إضافة Heroes Free GPT (GPT-4o وGPT-5.6 عبر واجهة متوافقة مع OpenAI مع بث حي)، وقناة Pollinations Mistral إضافية للتدوير، ودمج واجهة apigpt6 البسيطة (prompt → reply) مع إعادة محاولة تلقائية. المصادر الجديدة تنضم لفريق الأبطال تلقائيًا — كل واحد يكمل الثاني: إذا تعطّل مصدر يتابع التالي فورًا حتى تكتمل المهمة."
+  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v6.5.apk",
+  "notes": "v6.5 — الشيطان الظل: دمج ضخم جديد — مستودع ps-Agent كاملًا، وعائلة NousResearch (hermes-agent — أكبر إطار وكلاء مفتوح مع المهارات والإضافات والبوابات، وatropos، وhermes-official-plugins، وHermes-Function-Calling، وagent-governance-toolkit، وOpenShell، وTextArena، وautoreason، وغيرها)، وأشهر أطر الوكلاء على GitHub (gpt-researcher، OpenAgentsControl، dexter، gitagent، OpenAI Agent Swarm). أكثر من 13,000 ملف مصدري أصبحت مكتبة معرفية داخل التطبيق (مكتبة الأبطال). تصميم جديد كليًا: «تصميم الشيطان الظل» — أسود هاوي، قرمزي شيطاني، وهيب بنفسجي، وهالة متوهجة، وأيقونة شيطانية جديدة. كل المصادر مجانية وتتعاون كفريق واحد: لو تعطّل مصدر يتولى الآخر فورًا حتى تسليم نتيجة نهائية مبهر."
 }

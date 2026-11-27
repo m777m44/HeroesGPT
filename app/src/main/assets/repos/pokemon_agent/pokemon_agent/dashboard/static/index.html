@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hermes Plays Pokémon — Field Log</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=11">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23142d14'/><rect x='3' y='3' width='10' height='10' fill='%238bac0f'/><rect x='6' y='6' width='4' height='4' fill='%23142d14'/></svg>">
+</head>
+<body>
+<div class="frame">
+
+    <!-- ===================== TOP BAR ===================== -->
+    <header class="topbar">
+        <div class="brand">
+            <span class="brand-mark">◆</span>
+            <span class="brand-name">HERMES PLAYS POKÉMON</span>
+            <span class="brand-sub" id="gameName">Red / Field Log</span>
+        </div>
+        <nav class="run-meta">
+            <div class="controls" id="controls">
+                <button class="ctrl-btn start" id="btnStart" title="Start / resume autopilot">▶ START</button>
+                <button class="ctrl-btn pause" id="btnPause" title="Pause autopilot">❚❚ PAUSE</button>
+                <button class="ctrl-btn stop" id="btnStop" title="Stop autopilot">■ STOP</button>
+                <span class="ctrl-state" id="ctrlState">stopped</span>
+            </div>
+            <div class="meta-cell">
+                <span class="meta-k">RUN</span>
+                <span class="meta-v" id="metaRun">#001</span>
+            </div>
+            <div class="meta-cell">
+                <span class="meta-k">SESSION</span>
+                <span class="meta-v" id="metaSession">0:00:00</span>
+            </div>
+            <div class="meta-cell">
+                <span class="meta-k">TURN</span>
+                <span class="meta-v" id="metaTurn">0</span>
+            </div>
+            <div class="meta-cell status-cell" id="statusCell">
+                <span class="status-dot" id="statusDot"></span>
+                <span class="meta-v" id="statusText">connecting</span>
+            </div>
+        </nav>
+    </header>
+
+    <!-- ===================== MAIN ===================== -->
+    <main class="layout">
+
+        <!-- LEFT: reasoning stream (the protagonist) -->
+        <section class="col col-stream">
+            <div class="col-head">
+                <span class="col-title">FIELD LOG</span>
+                <span class="col-tag" id="streamTag">live reasoning</span>
+                <button class="ghost-btn" id="btnClearLog" title="clear">clear</button>
+            </div>
+            <div class="stream" id="logContainer">
+                <div class="entry e-sys">
+                    <span class="e-time">--:--:--</span>
+                    <span class="e-body">Field log initialising…</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- CENTER: game screen + grid map -->
+        <section class="col col-stage">
+            <div class="stage">
+                <div class="screen-shell">
+                    <div class="screen-deco tl"></div><div class="screen-deco tr"></div>
+                    <div class="screen-deco bl"></div><div class="screen-deco br"></div>
+                    <img id="gameScreen" class="screen" alt="game"
+                         src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwIAMCbHYQAAAABJRU5ErkJggg==">
+                    <div class="screen-wait" id="screenOverlay"><span>awaiting signal…</span></div>
+                    <div class="dialog-strip hidden" id="dialogOverlay"><span id="dialogText"></span></div>
+                </div>
+                <div class="screen-toggle">
+                    <button class="tog active" id="togGame" data-mode="game">SCREEN</button>
+                    <button class="tog" id="togGrid" data-mode="grid">GRID MAP</button>
+                    <span class="frame-meta" id="frameCount"></span>
+                </div>
+            </div>
+
+            <!-- location + position readout -->
+            <div class="readout">
+                <div class="ro-cell ro-wide">
+                    <span class="ro-k">LOCATION</span>
+                    <span class="ro-v" id="statMap">—</span>
+                </div>
+                <div class="ro-cell">
+                    <span class="ro-k">CELL</span>
+                    <span class="ro-v" id="statCell">E5</span>
+                </div>
+                <div class="ro-cell">
+                    <span class="ro-k">POS</span>
+                    <span class="ro-v" id="statPosition">(—, —)</span>
+                </div>
+                <div class="ro-cell">
+                    <span class="ro-k">MONEY</span>
+                    <span class="ro-v" id="statMoney">₽—</span>
+                </div>
+                <div class="ro-cell">
+                    <span class="ro-k">PLAYTIME</span>
+                    <span class="ro-v" id="statPlayTime">0:00:00</span>
+                </div>
+            </div>
+
+            <!-- battle bar -->
+            <div class="battle-bar hidden" id="battleInfo">
+                <span class="bb-label">BATTLE</span>
+                <span class="bb-body" id="battleContent"></span>
+            </div>
+        </section>
+
+        <!-- RIGHT: instruments -->
+        <aside class="col col-instruments">
+
+            <!-- Game session -->
+            <div class="inst">
+                <div class="inst-head">GAME
+                    <button class="ghost-btn" id="btnNewGame" title="Start a new game">+ NEW</button>
+                    <button class="ghost-btn" id="btnGames" title="Load a saved game">LOAD</button>
+                </div>
+                <div class="active-game" id="activeGame">no game loaded</div>
+                <ul class="game-list hidden" id="gameList"></ul>
+            </div>
+
+            <!-- Badges -->
+            <div class="inst">
+                <div class="inst-head">GYM BADGES</div>
+                <div class="badges" id="badgesRow"></div>
+            </div>
+
+            <!-- Objectives -->
+            <div class="inst">
+                <div class="inst-head">OBJECTIVES</div>
+                <ul class="objectives" id="objectivesList">
+                    <li class="obj-loading">loading objectives…</li>
+                </ul>
+            </div>
+
+            <!-- Counters -->
+            <div class="inst">
+                <div class="inst-head">TELEMETRY</div>
+                <div class="counters">
+                    <div class="counter">
+                        <span class="ctr-v" id="ctrBlackouts">0</span>
+                        <span class="ctr-k">BLACKOUTS</span>
+                    </div>
+                    <div class="counter">
+                        <span class="ctr-v" id="ctrCaught">0</span>
+                        <span class="ctr-k">CAUGHT</span>
+                    </div>
+                    <div class="counter">
+                        <span class="ctr-v" id="ctrActions">0</span>
+                        <span class="ctr-k">ACTIONS</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Milestones -->
+            <div class="inst inst-grow">
+                <div class="inst-head">MILESTONES</div>
+                <ol class="timeline" id="timeline">
+                    <li class="tl-empty">no milestones yet — the journey begins.</li>
+                </ol>
+            </div>
+        </aside>
+    </main>
+
+    <!-- ===================== PARTY BELT ===================== -->
+    <footer class="belt">
+        <div class="belt-head">PARTY</div>
+        <div class="belt-cards" id="teamContainer"></div>
+    </footer>
+
+</div>
+<script src="app.js?v=11"></script>
+</body>
+</html>

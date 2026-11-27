@@ -246,4 +246,5 @@
     <string name="repo_level_sub_format">%1$d ملفًا في هذا المستوى</string>
     <string name="repo_open_project">فتح المشروع</string>
     <string name="repo_back">رجوع</string>
+    <string name="repo_projects_count">مشاريع</string>
 </resources>

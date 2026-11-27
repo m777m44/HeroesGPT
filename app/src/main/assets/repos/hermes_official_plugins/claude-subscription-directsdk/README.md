@@ -1,0 +1,299 @@
+# Claude Subscription DirectSDK (Experimental) — Hermes plugin
+
+> Part of [Hermes Official Plugins](../README.md), Nous Research's official plugins for Hermes Agent. Formerly [`NousResearch/hermes-plugin-claude-subscription-directsdk`](https://github.com/NousResearch/hermes-plugin-claude-subscription-directsdk), which is archived; this directory carries its full history.
+
+![Claude Subscription DirectSDK — a Hermes model-provider plugin: Hermes → claude CLI → stream-json, on your Claude Pro/Max subscription](assets/hero-technohellenic.png)
+
+Standalone Hermes Agent model-provider plugin: `claude-subscription-directsdk-experimental`, displayed as **Claude Subscription DirectSDK (Experimental)**. It drives the unmodified official Claude Code executable as a request-scoped model client for your Claude Pro/Max subscription. Hermes keeps its normal agent loop, tools, approvals and compaction. Despite the name, the implementation speaks native stream-json directly and does not require the Python Agent SDK package.
+
+## Requirements
+
+- Hermes Agent 0.21.4 or newer, or `main` at/after `118984d7a02f` (hermes-agent PR #117451, the core half of #105863). On an older Hermes the plugin fails to load with a clear `Failed to load user provider plugin` warning rather than half-working.
+- Python 3.10+ on Linux, macOS or Windows. Native runs in its own process group (POSIX session / Windows `CREATE_NEW_PROCESS_GROUP`) and cancellation kills the whole tree (`killpg` / `taskkill /T`), so the `node` child behind the npm `claude.cmd` shim never outlives a cancelled request. The suite runs on all three in CI.
+- **The official Claude Code CLI, installed and logged in.** This plugin has no credentials of its own; everything goes through `claude`. Fable 5.2 (the `fable` alias) needs Claude Code **2.1.321** or newer, Haiku 5.5 (the `haiku` alias) needs **2.1.293** or newer, Sonnet 5.5 (the `sonnet` alias) needs **2.1.284** or newer and Opus 5.5 (the `opus` alias) needs **2.1.280** or newer; Mythos 5.1 is qualified on **2.1.316** (Anthropic documents no minimum); Mythos 5.1 and 5.2 are available only to organizations verified through Anthropic's verification programs ([Mythos 5.1](https://platform.claude.com/docs/en/models/mythos-5-1/overview), [Mythos 5.2](https://platform.claude.com/docs/en/models/mythos-5-2/overview)). An older CLI answers `400 Claude Code … does not support this model`, so run `claude update` first ([model configuration](https://code.claude.com/docs/en/model-config#model-aliases)).
+
+The plugin checks for `claude` at every seam and never guesses:
+
+| When | What happens without `claude` |
+| --- | --- |
+| plugin load | one warning in the log; the provider stays registered so setup can explain what is missing |
+| `hermes model` → this provider | the flow stops with the install hint and writes nothing to config |
+| `/model`, Desktop/TUI picker | the pinned catalog is listed (no live account picker) |
+| a request | fails immediately with the install hint instead of a `Popen` traceback |
+
+Install Claude Code with `npm install -g @anthropic-ai/claude-code`. `claude` is looked up on `PATH`, then in the usual install directories (`~/.local/bin`, `~/.claude/local`, `~/bin`, `~/.npm-global/bin`, `~/.bun/bin`, `~/.volta/bin`, `/opt/homebrew/bin`, `/usr/local/bin`), so a backend started by a LaunchAgent or Hermes Desktop with a minimal `PATH` still finds it. Point `CLAUDE_SUBSCRIPTION_DIRECTSDK_COMMAND` at the binary if it lives anywhere else. The `plugin.yaml` declares the same requirement under `external_dependencies`.
+
+## Install
+
+```sh
+hermes plugins install claude-subscription-directsdk      # from the Hermes plugin catalog (pinned, reviewed)
+# or straight from GitHub (tracks main):
+hermes plugins install NousResearch/hermes-official-plugins#claude-subscription-directsdk
+
+claude auth login
+hermes model          # pick "Claude Subscription DirectSDK (Experimental)"
+```
+
+Per-profile installs go under `~/.hermes/profiles/<profile>/plugins/` instead. The plugin declares `kind: model-provider`, so Hermes' provider discovery imports it directly; no `plugins.enabled` entry is needed.
+
+## Status
+
+**Single-request admission is implemented and live-qualified.** Native 2.1.263 can attempt extra generations despite `--max-turns 1` and disabled HTTP retries. A request-scoped loopback relay now forwards only the first Messages request and rejects subsequent attempts locally. Hermes receives the first completed upstream response, its actual usage and native stop reason; blocked native recovery does not turn a completed response into an exception. Truncated/incomplete streams and upstream HTTP errors remain failures. One exception: when an upstream response is itself rejected with a 401 authentication error (a revoked or rotated OAuth login), the relay admits native's follow-up request so the CLI can refresh the shared login and retry with a fresh token; a 401 on the retried attempt closes the gate again (#162).
+
+The integrated subscription-backed review completed seven Hermes calls with exactly seven upstream requests, twelve Hermes tool executions and twelve durable tool results. Context grew from 138,498 to 165,697 tokens; follow-up cache reads averaged 97.13%. Native accounting reported $0.8793728 in list-price equivalent, not a verified subscription charge. An earlier attempt began at 187K but exceeded the current native route's 200K bound after tools; that incomplete attempt is not counted as a successful review.
+
+A real subscription-backed Hermes task built and tested a CSV auditor. Separate live qualifications exercised streaming tool rounds, restart/resume, host-side denial, authentic steering, cancellation during generation, and a real CLI subagent completion. This is a review build, not a full-parity or production-readiness claim. See the remaining limitations below.
+
+Native Claude Code **2.1.263** is qualified. Replay acknowledgments and extra-body behavior are version-sensitive interfaces, not a public arbitrary-history SDK guarantee. The generic host support (external-process providers, replay carriers, setup gating) lives in Hermes core; this repository is only the provider.
+
+## Login and select
+
+```sh
+claude auth login
+hermes --provider claude-subscription-directsdk-experimental -m sonnet
+```
+
+Authentication belongs to the official CLI. The plugin never opens, copies, refreshes, or prints its credential files. The one thing it touches in the login directory is an empty `.oauth_refresh.lock` older than Claude Code's own 60 s stale window, which a Claude Code that exited mid-refresh leaves behind and never reclaims (anthropics/claude-code#95236); it is removed before each spawn. No Hermes API key is required or sent by the plugin. Anthropic API credentials (`ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_FOUNDRY_API_KEY`) inherited from Hermes' environment are dropped from every Claude Code child, so a key Hermes holds for its own `anthropic` provider keeps working there while this provider stays on the subscription. The normal Hermes client path rejects inherited custom Anthropic endpoint and cloud-backend overrides before spawning; the error names conflicting environment variables without printing their values. Remove those overrides from the launching environment when selecting OAuth. There is no silent HTTP/API-key fallback in this client.
+
+Subscription entitlement and extra-usage settings still belong to the account and native service. Disable extra usage in the account if you do not want overage billing. A native list-price cost estimate is not proof of a subscription charge.
+
+For a separately CLI-managed auth directory:
+
+```sh
+CLAUDE_CONFIG_DIR=/path/to/official-cli-config claude auth login
+export CLAUDE_SUBSCRIPTION_DIRECTSDK_CONFIG_DIR=/path/to/official-cli-config
+```
+
+An inherited `CLAUDE_CONFIG_DIR` also works; the per-profile `claude_config_dir` setting takes precedence over both environment directories. To select an executable outside PATH, set `CLAUDE_SUBSCRIPTION_DIRECTSDK_COMMAND` to its absolute path. There is no unrestricted public CLI-flags setting; isolation and denial flags are plugin-owned. The low-level Python `Client(env=...)` injection is available for explicitly controlled local fixtures and does not apply the inherited-environment guard. It is not the normal Hermes provider path or an OAuth certification mechanism.
+
+A request without tools starts no inert MCP helper: the helper's interpreter start (~0.6 s) and its
+handshake are skipped for titles, summaries and other tool-less calls, where a fixed per-call spawn
+cost hurts most (#42).
+
+**Supervised gateways (launchd, systemd, containers, cron):** Claude Code's local login check reads the process identity — without `USER` in its environment a logged-in CLI reports `loggedIn: false`, instantly and with no upstream request. The plugin derives `USER`/`LOGNAME` (`USERNAME` on Windows) from the parent process or the running uid before every spawn, so a filtered gateway environment no longer surfaces as a false `ClaudeCodeLoggedOut`. When a logged-out error does fire, it now carries native's first stderr lines, which makes a gateway-only failure diagnosable instead of silent (#44).
+
+Persistent configuration:
+
+```yaml
+model:
+  provider: claude-subscription-directsdk-experimental
+  default: sonnet
+```
+
+Auxiliary/fallback routing remains owned by Hermes. Configure those routes explicitly if they must also use the subscription; this provider does not silently change other selected providers.
+
+### Proxies
+
+The relay opens the upstream connection itself, so it applies native's proxy variables from the Hermes process environment: `https_proxy`/`HTTPS_PROXY`, then `http_proxy`/`HTTP_PROXY`, with `NO_PROXY` exceptions (standard-library matching; comma- or space-separated). The proxy must be an `http://` CONNECT proxy; `user:pass@` in its URL becomes a `Proxy-Authorization` header. TLS still terminates at `api.anthropic.com`, so the subscription bearer never reaches the proxy. A SOCKS or TLS-to-proxy URL is ignored with a warning and the relay connects directly, as it did before proxy support. For a proxy that must never be bypassed, use the `upstream_proxy` setting below, which fails closed.
+
+## Settings
+
+**Claude login config directory** (`claude_config_dir`, string, empty by default). Select a separately logged-in Claude config directory for the active Hermes profile, including profiles served by one multiplexed gateway:
+
+```sh
+hermes config set plugins.entries.claude-subscription-directsdk-experimental.settings.claude_config_dir <dir>
+```
+
+Read on every native spawn, including auth-status and model-discovery probes. Precedence: nonempty per-profile setting after trimming whitespace → nonempty `CLAUDE_SUBSCRIPTION_DIRECTSDK_CONFIG_DIR` → inherited `CLAUDE_CONFIG_DIR` → Claude CLI default. The selected value gets `~` expansion only; the plugin does not check whether the directory exists. An empty or whitespace-only setting falls through. A missing login produces the usual native authentication error. The process environment is never changed. A directory that is Claude Code's own default (`~/.claude` under the child's home) is not exported as `CLAUDE_CONFIG_DIR`: with that variable set, Claude Code looks for its macOS Keychain login under a name derived from the directory, so the default login would read as logged out. To give a profile a separate login on macOS, log in with the same variable set: `CLAUDE_CONFIG_DIR=~/.claude-work claude auth login`.
+
+Claude Code prefers `CLAUDE_CODE_OAUTH_TOKEN` over the login in its config directory, so the token decides first. The active profile's own token (its `.env`, which a multiplexed gateway does not load into the process environment) is passed to the child. A nonempty `claude_config_dir` setting removes any token inherited from Hermes' process environment so the selected directory's login is used. A profile served by a process that was launched for another profile (a multiplexed gateway, the Desktop backend) never inherits that process's `ANTHROPIC_CUSTOM_HEADERS`, and uses its own `CLAUDE_CODE_OAUTH_TOKEN` or config directory (the `claude_config_dir` setting, or `CLAUDE_SUBSCRIPTION_DIRECTSDK_CONFIG_DIR` in its `.env`) when it has one. A served profile with neither shares the login Hermes was started with (the default `~/.claude`, or the process's token): one person's profiles draw on one subscription, as before 0.4.0. If the profile's secrets cannot be read at all, the request fails instead of starting Claude Code on a guess. On a single-profile install the profile's token is the inherited one, so nothing changes there.
+
+**Isolate profile Claude logins** (`isolate_profile_logins`, boolean, off by default). For a Hermes install that serves profiles of several people, so one profile never spends another person's Claude allowance (#313). On, a served profile with neither its own token nor its own config directory is refused before Claude Code starts, with a login error naming both ways to give it one. The profile the Hermes process was started for always keeps its own login: its turns and its own cron fires, whether core binds them stamped or not, except inside core's restart-safe cron worker, whose process home can't show whose login it inherited. The setting is the install owner's: it is read from the install's default profile and the profile the Hermes process was started for (`hermes -p <name> gateway`), managed overlay included, and never from a served profile's own config, so a served profile can neither lift nor add it. A value that can't be read counts as on:
+
+```sh
+hermes config set plugins.entries.claude-subscription-directsdk-experimental.settings.isolate_profile_logins true
+```
+
+**Plan limits (`/usage`)** are asked of Claude Code itself (its `get_usage` control request), so they follow this per-profile setting, work with `auth.adopt_external_logins: false`, and the plugin never reads or sends the Claude login. Besides the session, weekly and per-model limits, `/usage` lists extra usage (on or off, used and monthly limit), usage credits spent, and this week's share per surface (Claude Code, chats, Cowork). The probe sends no Messages request, and it leaves `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` unset (Claude Code skips the fetch under it) unless you exported it yourself, in which case `/usage` says why the limits are missing.
+
+**Claude Code telemetry and error reporting** (`claude_code_telemetry`, off by default). Off, the plugin starts Claude Code with `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, `DISABLE_TELEMETRY` and `DISABLE_ERROR_REPORTING` set (#331). Two zero-inference probes are the exception, because those flags also switch off a fetch they exist for: the model picker's `initialize` handshake runs without `DISABLE_TELEMETRY` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, since either one stops Claude Code's feature-flag fetch and shrinks its picker from every model the account runs to each family's current one (on 2.1.319, 13 rows become 5, #86); and the `/usage` probe runs without `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`. A flag you export yourself is never lifted. Turn the setting on to let Claude Code send its telemetry and error reports on every spawn; that adds about 0.25 s to each spawn (measured on Linux and Windows). Change it in the Desktop app under **Capabilities → Plugins**: the settings gear on the `claude-subscription-directsdk-experimental` row opens the switch. Or from the CLI:
+
+```sh
+hermes config set plugins.entries.claude-subscription-directsdk-experimental.settings.claude_code_telemetry true
+```
+
+It is read for the active profile on every spawn, so it applies to the next request without a restart. Whatever the setting, the plugin never lets the CLI auto-update itself, use its feedback upload path or send its own session-title request (`DISABLE_AUTOUPDATER`, `DISABLE_FEEDBACK_COMMAND`, `CLAUDE_CODE_DISABLE_TERMINAL_TITLE`), and an opt-out you export yourself (`DISABLE_TELEMETRY`, `DO_NOT_TRACK`, ...) is passed through untouched.
+
+**Claude Code calls at once** (`max_concurrent`, default 4; #329). At most this many Claude Code turn processes run at the same time in one Hermes process, whatever started them: the main agent, parallel subagents (`delegate_task` runs up to 10 at once), auxiliary calls such as titles and compression, and every profile a multiplexed gateway serves. Each process uses about 250 MB, and all of them draw on one subscription, whose rate limits a burst can trip together (the plugin turns Claude Code's own retries off so Hermes owns retry policy). A call past the limit waits for a free place in arrival order, within its own request timeout; it is not failed and not sent to a fallback provider. Interrupting a waiting call ends it at once without starting Claude Code. A call that waits longer than 2 s writes a warning to the log (`hermes logs`) naming the limit; a model provider has no way to put a line on Hermes' status bar, so the CLI shows the usual spinner meanwhile. A place is freed when its process exits, so a crashed or killed process never holds one. `/usage`, the model picker and the login check do not count: they send no model request and finish within seconds. The setting is read per call from the profile that makes it; with profiles that set different limits, each call waits until fewer than its own limit are running.
+
+```sh
+hermes config set plugins.entries.claude-subscription-directsdk-experimental.settings.max_concurrent 6
+```
+
+**Extra usage** (`extra_usage`, `allow` | `notify` | `ask` | `stop`, default `notify`). What a request does once Claude Code reports that this account has passed its plan limit and is drawing paid extra usage (#43). Claude Code sends that signal with every request (`rate_limit_event`: `isUsingOverage`, `resetsAt`); the plugin keeps it in memory per process, per Claude login, and writes no files.
+
+- `allow`: nothing changes.
+- `notify`: requests continue; one warning per limit window goes to the log (`hermes logs`).
+- `ask`: requests are refused before Claude Code starts, with a message that names the reset time and the command that allows extra usage until then: `hermes config set plugins.entries.claude-subscription-directsdk-experimental.settings.extra_usage_allowed_until <reset time>`.
+- `stop`: requests are refused until the plan limit resets; the message names the reset time and how to switch to `ask` or `allow`.
+
+A refusal is a plan-limit stop: Hermes shows the message and does not switch to a fallback provider. The request that crosses the limit is already billed when Claude Code reports it; the setting acts on the next one. In `ask` and `stop`, a process that has not yet seen a request for the login asks Claude Code once (`get_usage`, no Messages request, about 0.5 to 0.9 s) and counts the account as spilling when extra usage is on and the session or weekly limit is at 100%. That check runs on the turn's own login and route. If it cannot tell (Claude Code gives no usage answer, or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` is exported so it skips the fetch), the request is refused with the reason, since these modes exist to prevent spend you did not approve; the next request asks again. An `ask` window you already allowed with `extra_usage_allowed_until` skips the check. An unknown value counts as `stop`. `extra_usage_reserve_percent` (for example `97`, default unset = 100) moves the stop earlier: in `ask` and `stop`, once the session or weekly window reaches that percent and extra usage is on, requests are refused before the one that would first be billed, read from the same `get_usage` check and from each turn's own `rate_limit_event`.
+
+A 400 that says "Third-party apps now draw from your extra usage" is reported the same way (a billing stop whose message points at the plan settings and names the `hermes-agent` caller), instead of Hermes silently answering from a fallback provider (P#296).
+
+```sh
+hermes config set plugins.entries.claude-subscription-directsdk-experimental.settings.extra_usage stop
+```
+
+**Organization gateway** (`upstream_url`, `upstream_proxy`, `upstream_ca_file`, all empty by default; #46). One explicit opt-in per profile for organizations that route model traffic through their own LLM gateway, an egress CONNECT proxy, or a TLS-inspecting proxy:
+
+```sh
+S=plugins.entries.claude-subscription-directsdk-experimental.settings
+hermes config set $S.upstream_url https://llm-gateway.example.com/anthropic
+hermes config set $S.upstream_proxy http://egress.example.com:3128
+hermes config set $S.upstream_ca_file /etc/ssl/corp-root.pem
+```
+
+- `upstream_url` replaces `https://api.anthropic.com` for every relay the plugin opens: turns, `/usage` and the picker handshake (the picker is then Claude Code's generic list rather than the account's own). It must be `https://` (`http://` only for a loopback host) with no `user:password@`, query or fragment. **The Claude login's bearer token goes to this host**: one warning per profile and route names it in the log.
+- `upstream_proxy` is an `http://host:port` CONNECT proxy for that hop; TLS still ends at the upstream host. Its credentials are a secret: put `user:password` in `CLAUDE_SUBSCRIPTION_DIRECTSDK_PROXY_AUTH` in the profile's `.env`. With this setting the `HTTPS_PROXY` variables are not used for the relay.
+- `upstream_ca_file` adds a PEM bundle to the system roots; certificate and hostname checks stay on. The warning then says the TLS is inspected.
+- Gateway auth headers go in `ANTHROPIC_CUSTOM_HEADERS` in the profile's `.env`; Claude Code sends them and the relay forwards them. Only the profile Hermes was started for can keep its inherited gateway headers. Other profiles use only their own headers, even when they share the subscription login.
+- Fail closed: a setting that is set but invalid (a non-HTTPS URL to a non-loopback host, credentials in a URL, a SOCKS proxy, an unreadable CA file, a value that is not a string such as `upstream_proxy: false`) refuses the turn, `/usage` and setup with an error naming the setting. It never falls back to the direct route.
+- An inherited `ANTHROPIC_BASE_URL` stays refused with or without these settings; no environment variable selects the upstream.
+- What goes to the gateway: Claude Code sends only Messages requests (`POST /v1/messages`) to its base URL, and the relay forwards that path and nothing else. Its own account calls go to `api.anthropic.com` whatever the base URL: `/usage` (`/api/oauth/usage`), the picker handshake and every spawn's bootstrap, MCP directory and, with `claude_code_telemetry` on, feature-flag and event logging (measured on 2.1.319 and 2.1.292). Those carry the Claude login to Anthropic itself, never to another host. With `upstream_proxy` or `upstream_ca_file` set, Claude Code is started with that proxy (`HTTPS_PROXY`, credentials included) and that CA (`NODE_EXTRA_CA_CERTS`), so these calls leave through the same egress; the loopback relay stays in `NO_PROXY`. A network that allows no direct route to `api.anthropic.com` therefore needs `upstream_proxy`; with only `upstream_url` set, `/usage` and those calls go out directly.
+
+## Ownership and replay
+
+Each `chat.completions.create` starts a fresh process in a private temporary directory, once a `max_concurrent` place is free. Native tools, skills and setting sources are disabled. MCP advertises only the current Hermes tool inventory, has inert callbacks, and is denied execution by native `dontAsk`. Full descriptions and schemas are supplied through tools plus validated generation fields in `CLAUDE_CODE_EXTRA_BODY`, applied from a private native settings file; the system prompt uses a private file too. This avoids the OS per-argument/environment-string limit. Authentication and identity fields are never replaced.
+
+For per-call replay, native moves today's date line from its environment message into a trailing `role: system` message, and puts its context reminder ahead of the newest user turn; neither recurs on the next request. The relay returns that exact date line to the end of the environment message (other trailing text stays put) and drops plain-text reminders before the newest queried user frame after an assistant turn, as native's own tool-result steps already do. Later requests then replay the context each step's signed thinking was generated against, and keep the previous turn's cache prefix (#40, #36). A frame that cannot be found exactly once is left as native built it. Removed cache markers transfer without increasing their count.
+
+Canonical history is replayed in order. Historical user frames use `shouldQuery:false`, each with a zero-turn acknowledgment; the final user/tool-result frame queries. There is no parked native session or native approval wait, and the adapter adds no synthetic continue prompt. The local admission relay prevents native recovery from issuing another upstream request. The native token-budget reminder is disabled because Hermes owns budgets and replay reconstructs that reminder across the cache boundary. Other native annotations remain present, so the wire prompt is not byte-identical Hermes-only context. On the conversation's first request native prepends its per-request context (the account-email reminder) to Hermes' first user turn but replays that turn without it afterwards; the relay drops that plain text before Hermes' frame, so the first turn is sent exactly as later requests replay it, is cached once instead of being re-written on call #2 (#77), and Claude never reads Claude Code's context as part of the user's message (#195). Native's auto memory and CLAUDE.md files (including a managed one) stay off (`CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, `CLAUDE_CODE_DISABLE_CLAUDE_MDS=1`): `--setting-sources ''` does not cover auto memory, and Hermes owns memory and instructions.
+
+The relay restores the newest tool-result frame from Hermes' query when it can match the native frame unambiguously, so a native account-email reminder cannot masquerade as tool output. A frame it cannot match losslessly is forwarded exactly as native built it, and the mismatch is reported in the response usage (`native_admission.unrestored`). Restoration is limited to queried frames containing tool results; ordinary user turns and separate native system messages are untouched. The relay treats omitted `is_error` as `false`, restores Hermes' exact original result shape after matching equivalent plain-text encodings, and admits only unmarked plain-text additions after the matched frame. Images, metadata-bearing text, unexpected results, ambiguous cache-marker mappings, or changed tool identity/content leave the native frame untouched (fail open), so a CLI that reshapes its tool results costs an uncached tail, never a failed turn. Marker-bearing additions are validated before breakpoint relocation, preventing cache-marker laundering onto host content. When native marks more than one message block (Claude Code 2.1.287+ marks the last `tool_use` and a trailing per-request `role: system` message), marks after the last block the next request replays are folded into one breakpoint on that block; marks inside the replayed span, and every system/tools mark, stay as native placed them. Once a user message carries more than tool results (the next turn, or a `/steer` row), cache entries written after the finished turn's first thinking block stop matching, and Anthropic's lookup walks back at most 20 blocks from a breakpoint, so after a longer tool loop the next turn's first call read only tools and system and wrote the whole conversation again (#122). The relay therefore keeps one more message breakpoint on the last block of the user message right before the open turn's first assistant message with thinking (usually the turn's opening frame, or a `/steer` row), where an earlier request of the turn already wrote an entry, once that block is more than 20 blocks (counted without merging tool runs) before the recurring breakpoint; the next turn then re-writes only the finished loop from its first thinking block. A shorter loop, or one without thinking, keeps the recurring breakpoint alone. Native 2.1.285 places three breakpoints (two system, one message), so the extra one is the fourth; on a request already at Anthropic's limit of four (2.1.287+), a native mark between it and the recurring breakpoint moves there instead, and with neither it is skipped. Every marker in the request takes a slot, including a top-level one and markers nested in tool-result content. So the count grows by at most one and never past four, the extra mark takes the TTL of the next mark after it, and system/tools marks are never touched. Synthetic loopback tests establish wire-history continuity across requests and client recreation, not vendor cache hits or savings.
+
+The relay binds an ephemeral loopback port with a random per-request route. Native authorization headers pass through memory directly to the upstream and are never logged or persisted. The upstream request body and native identity headers are preserved, while HTTP transfer encoding is normalized. The relay captures streamed text, signed thinking, tool arguments, usage and stop reason before native recovery can replace them. Cancellation shuts down the active upstream connection and the native process; request teardown removes the listener. No external relay service or bundled vendor executable is required.
+
+### Long-context caching qualification
+
+A real Sonnet 5 Hermes review task reproduced poor cache reuse: its first request had 187,049 input tokens; the next tool round read only 6,989 of 190,840 input tokens from cache (3.66%), rewriting 183,849 tokens into the one-hour cache. Identical-request testing at 179K tokens had passed, but did not exercise this replay boundary.
+
+Disabling the native reminder restored stable prefixes without adding cache markers or changing cache TTL. A completed seven-call review used ten real Hermes tool executions, ran six offline tests, and wrote its review artifacts. Context grew from 187K to 212K; follow-up requests averaged 97.99% cache reads, or 85.45% including the cold start. Native list-price accounting totalled $1.1030034, not a verified subscription charge. These are Sonnet 5 results: Fable 5.1 required usage credits on the qualification account and was not exercised with paid credits. Model entitlement and allowance consumption remain native-account dependent.
+
+Text streams incrementally. A complete tool batch is published only after assistant completion, `message_stop`, final usage and native exit. Hermes then applies its own hooks, approvals, tools and persistence. Tool names map through `mcp__hermes__`; original names must be unique ASCII alphanumeric/underscore/hyphen identifiers of at most 64 characters. Names longer than 50 characters are shown to native under a stable hash-suffixed 50-character alias that maps back to the original name.
+
+`--max-turns 1` is a logical native step; the relay supplies the HTTP admission boundary. `error_max_turns` is accepted with a complete tool batch, usage and exit code 1. Native `num_turns` may be 2 at that boundary. A completed first response also survives a locally denied recovery attempt or native refusal rendering; Hermes receives the actual refusal, not the CLI's synthetic error text. Other failures remain failures.
+
+A versioned `reasoning_details` envelope retains ordered native assistant messages and signed thinking. Unchanged projections preserve native blocks, including harmless surrounding-whitespace normalization. Transformed assistant text/tool projections replay canonical text and tool-use blocks instead of stale signed thinking; foreign provider reasoning carriers are ignored. Edited-assistant replay passed against the real service. Native autocompaction is disabled so Hermes retains compaction ownership; this does not establish parity for every history transformation or cross-model signed replay.
+
+Mid-turn `/steer` uses Hermes' standard delivery: a standalone typed user row appended after the newest tool result. This provider adds no steering-specific transport. Natural change-of-plan steering passed live in the real loop; transport fidelity cannot guarantee model obedience.
+
+## Lifecycle and request support
+
+Outside an event loop, `create` is synchronous; inside an event loop, it returns an offloaded coroutine. Streams also support `async for`. One client should belong to one independently cancellable Hermes owner.
+
+`cancel()` kills the owned process tree (POSIX process group / Windows `taskkill /T`) without closing another thread's active descriptors. `Client.close()` leaves running requests alone and the client keeps accepting new ones: Hermes' auxiliary cache closes a client another event loop is still using, and each request owns and reaps its own process (#378). A stream's own `close()` / `aclose()` stops that request and is required for early stream exit; active consumers unwind after cancellation. Live interruption stopped generation and the observed native PID exited.
+
+Supported translation includes text, base64/native images and documents, canonical tools/results, output-token limits, stop sequences, reasoning enable/disable and effort, and JSON-schema response-format projection. Unsupported native sampling fields are omitted rather than forwarding deprecated `temperature` from auxiliary callers. Reasoning effort is clamped to native-supported levels, including Hermes minimal/ultra inputs. Native thinking deltas surface as `reasoning_content`. An upstream refusal (`stop_reason: refusal`) finishes as `content_filter` with `stop_details`' explanation, or its category, as `message.refusal`, so Hermes treats it as a terminal refusal (one fallback try) rather than retrying an empty reply. A tool call the refusal cut off is left out of `tool_calls` (Hermes never runs it, and shows the refusal's reason instead of "no explanation"); the signed native turn in the replay carrier keeps it. Model/service restrictions still apply.
+
+Pinned routes declare vision, so user images attach as native image parts and `vision_analyze` returns its image inside the tool result instead of calling `auxiliary.vision`. Only base64 images are sent; a remote `http(s)` image URL becomes a text hint to call `vision_analyze`. An explicit `auxiliary.vision`, `agent.image_input_mode: text` or `model.supports_vision: false` still routes through text.
+
+The relay and provider forward every `text_delta` as it arrives, but text that follows a tool result usually reaches them late and all at once - measured across runs, all of the answer's deltas came in a single upstream read (~6 s) where the same turn without tool history spread evenly - so a client rendering incrementally shows a pause and then a wall of text after tool rounds (#33). The hold is upstream-facing (native's request or the API's handling of replayed tool history), not a relay buffer; pacing the display is the client's job.
+
+Unknown parameters fail explicitly. Hermes Relay's `extra_headers.traceparent` is accepted as host-local tracing metadata and discarded before native request translation; it is never sent to Claude Code or the upstream. Empty/null header containers also work. Any other header or invalid container is rejected, so authorization and native identity remain CLI-owned. Unsupported surfaces include assistant prefill, strict function mode, forced tool choice, `parallel_tool_calls=False`, `n>1`, JSON-object-only mode, arbitrary headers/body fields, remote image downloads, and cross-model signed-history parity. The read-idle timeout defaults to 180 seconds, resets on native output, and accepts Hermes' finite HTTPX read-timeout shape. Large prompts remain subject to native/OS limits.
+
+Hermes chooses retry or fallback from an error's `status_code`, so failures carry one. An upstream rejection carries the first attempt's real HTTP status. A 429 that rejects a used-up plan window (`anthropic-ratelimit-unified-status: rejected`) also carries the window's reset, the `anthropic-ratelimit-unified-reset` epoch native's own limit message is built from, as `body['resets_at']`: Hermes cannot parse that message's clock time (`resets 3:45pm`), and with the field it benches the route until the window reopens instead of on a blind backoff and names the reset time in its limit notice. A 429 that rejects no window (a throttle while the window is open) carries no reset. An error native answers itself carries the status for native's own error code: `rate_limit` 429 (a plan or session limit), `billing_error` 402, `authentication_failed` and a missing login 401, `overloaded` 529, `server_error` 503; a missing Claude Code CLI is 503. Local request validation stays `ValueError`; malformed native output and other process failures carry no status. Hermes' non-streaming stale-call watchdog stops a hung call through `cancel()`; the provider profile classifies that kill as a timeout rather than an unknown error.
+
+An incomplete upstream response also carries the captured Anthropic request ID in the error text (`request_id=req_...`) and the exception's `request_id` attribute, when available. Only IDs starting with `req_`, containing ASCII letters, digits, underscores or hyphens, and at most 128 characters long are included. Missing or invalid IDs are omitted. This adds no header dump or prompt/response logging and requires no debug setting. It cannot recover an ID from an earlier failure that did not record it.
+
+In the agent loop Hermes passes its own request timeout as that read-idle limit (`providers.<provider>.request_timeout_seconds`, 1800 seconds by default as of Hermes 0.21.5). Hermes treats `process://` as a local endpoint, so its non-streaming stale-call watchdog is off for a model id without a Hermes reasoning stale floor (as of 0.21.5, for example `claude-sonnet-5[1m]` and the Haiku ids) unless a stale timeout is configured. A native call that hangs without output then holds the turn for the whole read-idle limit before Hermes retries or falls back. To bound it, configure the stale timeout; on this non-streaming path it limits the whole call, not a silence, so choose a value above your longest healthy turn:
+
+```yaml
+providers:
+  claude-subscription-directsdk-experimental:
+    stale_timeout_seconds: 900
+```
+
+## Setup: `hermes model` → Claude Subscription DirectSDK (Experimental)
+
+Selecting the provider asks the Claude CLI itself, never Anthropic, before anything is saved:
+
+1. **Installed?** `claude` must resolve on PATH, in a usual install directory, or through `CLAUDE_SUBSCRIPTION_DIRECTSDK_COMMAND`. Otherwise one line: install with `npm install -g @anthropic-ai/claude-code`, and the flow stops without touching config.
+2. **Logged in?** `claude auth status` (local credential store, ~0.3s). Logged in shows `credentials: ✓ (Claude Pro)`. Logged out on a terminal starts `claude auth login` inline; it opens the browser and takes the pasted code, then the flow re-checks and continues. Without a TTY it prints the instruction and stops.
+3. **Which models?** The CLI's `initialize` handshake returns the account's own picker. Claude Code serves that picker only when it talks to Anthropic directly: behind any `ANTHROPIC_BASE_URL`, the relay included, it logs `[servedCatalog] off (not_first_party)` and answers a generic list without the models granted to the account. The handshake therefore runs without the relay; it writes only `initialize` and sends no user turn, so it makes no Messages request (on Claude Code 2.1.316 its debug log shows only its bootstrap, MCP-directory and telemetry fetches). Without the relay nothing counts its upstream calls, so these rows report `upstream_requests: null` (unobserved) rather than a counted zero. An inherited auth or backend override (`ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY`, Bedrock/Vertex/Foundry) keeps the handshake behind the relay. Every row is listed; the pinned catalog below only adds metadata to the models it knows. Pinned rows are mapped to Hermes route ids and deduplicated (`opus` and `opus[1m]` are one 1M route). A model the catalog does not pin yet keeps the id and label the CLI announced and carries a dim `· unpinned` note; it gets `[1m]` only when the CLI itself offers that form, and a plain + `[1m]` pair collapses onto `[1m]` as pinned models do. Rows the CLI marks "Draws from usage credits", plus Fable 5, 5.1 and 5.2 on plans that bill them to usage credits per [Anthropic's plan rule](https://support.claude.com/en/articles/15424964) (Pro; on Team and Enterprise the handshake names only the plan, so those rows read `· usage credits on standard seats`, since premium seats include Fable), carry a dim `· usage credits` note (`· usage credits · unpinned` on an unpinned row); nothing is hidden. Access-gated models (Mythos 5.1 and 5.2) are pinned for their window and thinking policy but listed only when the account's picker offers them: they are never appended from the catalog and never in the fallback list. If the handshake fails the pinned catalog below, minus access-gated models, is used.
+
+The same `discover_models()` feeds `provider_model_ids()`, so the TUI/Desktop pickers and `/model` list the account's picker too.
+
+## Cache lifetime
+
+Claude Code chooses the prompt-cache tier per request: a `claude -p` turn is its main conversation, which asks for the one-hour tier on a subscription within plan usage (and the five-minute tier once the account draws extra usage), at 2x the input rate per write against 1.25x for five minutes. Hermes core never gives a delegated child the one-hour tier, since a subagent calls every few seconds and is gone, but it can only clamp markers it builds; here native places them. The provider therefore asks for five minutes on a delegated child's requests by starting its Claude Code with `CLAUDE_CODE_PROMPT_CACHE_TTL=5m` (a value you export yourself wins). The child is recognised by core's child cache scope (`sub_<hash>`); every other request keeps native's default.
+
+## Subscription usage
+
+Claude Code names its caller on every request, and subscriptions meter the 5-hour window by that name: `claude -p` defaults to `sdk-cli`, which draws the window about 2x faster per token than the interactive CLI or a client's own name ([anthropics/claude-code#97074](https://github.com/anthropics/claude-code/issues/97074)). The plugin runs native as `hermes-agent`, overwriting any name inherited from a host (`sdk-py`, `claude-desktop`). Measured Oct 31 2026 on a Max plan with Opus 5.5 and Claude Code 2.1.316, four arms of four fresh ~43K-token requests each ($1.09 list-equivalent per arm, output pinned), 5-hour utilization read after each arm:
+
+| arm | name on requests | 5-hour Δ (two arms) | total for $2.19 |
+|---|---|---|---|
+| plugin before this change | `sdk-cli` | +6% / +6% | 12% |
+| plugin now | `hermes-agent` | +4% / +3% | 7% |
+
+The same work used about 1.7x less of the window under the plugin's own name. Anthropic has not documented the weighting, so it can change.
+
+The readings below predate the change and describe the `sdk-cli` rate.
+
+Measured Sept 9 2026 on a Pro plan (Sonnet 5 1M, ~500K fresh input tokens per arm, output pinned to `Hello!`, session meter read on claude.ai before/after each arm):
+
+| arm | list-$ pushed | session meter Δ | points per $ |
+|---|---|---|---|
+| `claude -p` (two windows) | 2.12 / 1.94 | +19 / +17 | 8.9 / 8.8 |
+| this provider | 2.36 | +21 | 8.9 |
+| Claude Code interactive TUI (two runs) | 2.22 / 2.25 | +12 / +11 | 5.4 / 4.9 |
+
+This provider draws subscription usage at exactly the `claude -p` / Agent SDK rate; there is no Hermes-specific penalty. Interactive Claude Code is metered at roughly 0.58x that rate, so plan for about 60% of the TUI's throughput per 5-hour window (≈ $6.5 vs ≈ $11 list-equivalent of Sonnet 5 on Pro). The wire-level usage buckets are identical across arms, so the weighting is server-side and applies to every `-p`/SDK harness. In that Sonnet 5 comparison Hermes sent ~0.6x the tokens native Claude Code did on identical coding tasks. If your drain looks higher, compare Hermes `/usage` with Claude Code `/cost` on the same task.
+
+Re-checked Oct 14–15 2026 on a Max plan with Opus 5.5 and Claude Code 2.1.299. The API reports 5-hour utilization in 0.01 steps, so the list dollars between consecutive steps were measured inside stretches of one kind of traffic: this provider $2.70 per step (4 intervals) and `claude -p` $2.87 and $2.44 (1 interval each), the same rate within noise. A block of interactive TUI conversations took about $6.65 per step, which suggests the TUI drew usage roughly 2.3x more slowly per list dollar than `claude -p` on this plan. That figure rests on about one meter step of TUI traffic, so treat it as an early reading.
+
+## Model metadata and accounting
+
+The picker exposes these explicit native routes:
+
+| Model | Native selection | Context |
+| --- | --- | --- |
+| Sonnet 5.5 | `claude-sonnet-5-5[1m]` | 1,000,000 |
+| Sonnet 5 | `claude-sonnet-5[1m]` | 1,000,000 |
+| Haiku 5.5 | `claude-haiku-5-5[1m]` | 1,000,000 |
+| Haiku 4.5 | `claude-haiku-4-5-20251001` | 200,000 |
+| Opus 5.5 | `claude-opus-5-5[1m]` | 1,000,000 |
+| Opus 5 | `claude-opus-5[1m]` | 1,000,000 |
+| Opus 4.8 | `claude-opus-4-8[1m]` | 1,000,000 |
+| Fable 5.2 (requires Claude Code 2.1.321 or later) | `claude-fable-5-2[1m]` | 1,000,000 |
+| Fable 5.1 | `claude-fable-5-1[1m]` | 1,000,000 |
+| Mythos 5.2 (verified organizations; listed only when the account's picker offers it) | `claude-mythos-5-2[1m]` | 1,000,000 |
+| Mythos 5.1 (verified organizations; listed only when the account's picker offers it) | `claude-mythos-5-1[1m]` | 1,000,000 |
+
+Short names `sonnet`, `haiku`, `opus` and `fable` resolve to the corresponding pinned routes above (`fable` is Fable 5.2; select `claude-fable-5-1` to keep Fable 5.1). Known 1M model IDs also receive the native `[1m]` suffix automatically; Haiku 4.5 does not. Unknown model IDs pass through unchanged and are never promised 1M: a plain one reports the 200K window native Claude Code applies to an unverifiable id behind the relay, so Hermes' own family-name guess (which would size `claude-opus-5-5` at 1M before it was pinned) cannot budget past it; an unknown `[1m]` id reports nothing, and no Hermes estimate for it exceeds the native 1M. An explicit Hermes `model.context_length` still overrides the host's window, including a smaller compaction budget.
+
+The local relay sets `ANTHROPIC_BASE_URL`, which makes Claude Code apply its gateway defaults. Its documented Sonnet 5 gateway default is 200K unless `[1m]` is selected; this was the cause of the earlier downgrade, not evidence of a general subscription limit. Both native argv and Hermes metadata now select the same window. See [Claude Code model configuration](https://code.claude.com/docs/en/model-config#sonnet-5-context-window).
+
+Native initialization can enumerate the current picker without a Messages request, but its returned list did not include Opus 4.8. The plugin therefore keeps the version-pinned entries as the fallback catalog, and when the live picker answers it appends every pinned route the picker did not name after the advertised rows, so older pinned models (Opus 5, Opus 4.8) stay selectable instead of disappearing once the CLI moves the family alias. A model the live picker offers before this table pins it is listed, `unpinned`, the day the CLI ships it; pinning adds its 1M route and qualified window, it does not decide visibility. It does not spawn a model or query an HTTP `/models` endpoint when opening Hermes' picker. Existing installations may need **Refresh models** to discard the previous cached list; the live picker above is extended with this static list whenever the CLI is logged in.
+
+The follow-up probes used native **2.1.258**. The Sonnet 5 1M route accepted **902,783 actual input tokens** and returned the requested response, with native `contextWindow: 1000000` and exactly one upstream request. Native list-price equivalent was **$3.611238**. A subsequent short `sonnet` request verified automatic routing to `claude-sonnet-5[1m]`; a real `haiku` request resolved to Haiku 4.5 with a 200K window. Opus 5 and Opus 4.8 were then smoke-tested through the integrated relay: each resolved to its `[1m]` route, reported a 1,000,000-token native window, returned the requested reply in exactly one upstream request, and cost $0.001485 list-equivalent each. Fable 5.1 was rejected by the native client on the qualification account: `Fable 5.1 requires usage credits`. That is Anthropic's documented plan rule, not a routing defect: on Pro (and Team standard seats) Fable 5 / 5.1 bill to pay-as-you-go usage credits from the first request, while Max plans include them up to 50% of weekly limits ([Claude Fable models on your plan](https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan)). The entry stays in the picker because every paid plan can reach it; the provider surfaces the native error verbatim and never falls back to another model. Native discovery also labels Opus 1M as drawing usage credits on Pro. Plan-aware picker badges from the native `initialize` handshake (which reports `subscriptionType` without an upstream request) are a follow-up.
+
+### Hermes compaction qualification
+
+A real multi-turn run with a **200K Hermes window** and `compression.threshold: 0.75` automatically compacted after a turn with 154,038 input tokens, at an approximately 168K next-request preflight estimate. The real summarizer completed, SQLite archived fifteen original rows and retained a summary, and the next ordinary request succeeded at 144,568 input tokens. Two additional model calls executed a real `read_file` and returned both the remembered project codename and the exact file value; that tool result was verified in SQLite. This final-routing run used eleven upstream requests total and **$1.221155** native list-price equivalent. Native autocompaction remained disabled: the summary and durable commit were owned by Hermes. The earlier native-200K control also passed; no compressor implementation change was needed.
+
+Token usage retains native uncached/cache-read/cache-write/output components. Completed responses also retain native `total_cost_usd` and `modelUsage`. When every reported model has `costBasis: list` and the total is finite and nonnegative, Hermes records that exact native amount as **estimated API list-price equivalent**, not an actual subscription invoice or extra-usage charge. It is never marked free/included or replaced with guessed alias prices. Missing or invalid final accounting remains unknown; interrupted requests must not be interpreted as free or zero-token service work. Hermes' iteration and runtime budgets remain host-owned; this provider does not add an account-level overage cap.
+
+## Verification
+
+```sh
+# HERMES_AGENT_REPO defaults to ~/.hermes/hermes-agent (a hermes-agent checkout supplies `providers`/`agent`)
+~/.hermes/hermes-agent/.venv/bin/python3 -m pytest tests/
+python evals/directsdk_admission.py /path/to/claude
+python evals/directsdk_cache_wire.py /path/to/claude
+```
+
+CI runs both evals on Linux and macOS through `evals/ci.sh`, against a pinned Claude Code installed from npm (`CLAUDE_CODE_VERSION`, default 2.1.292). They need no credentials and make no inference calls. Bump the pin to qualify a new Claude Code release: a change in native's wire shape fails here before it reaches users.
+
+Transport invariant tests cover signed replay and harmless normalization, transformed projections, final tool batches/usage, async use, lazy failure, invalid parameters, conflicting auth, and active/paused/unstarted stream cleanup. The admission regression fails on the previous implementation (two upstream requests) and passes with one request, preserving first-response usage including zero values. Its cancellation control verifies upstream socket closure. A real-native ten-case loopback qualification covers normal text, tools, output/context limits, thinking-only recovery, refusal, HTTP errors, disconnects and cancellation, with one upstream request per call. Its responses are synthetic protocol fixtures, not paid-model evidence.
+
+Installed-plugin discovery (`$HERMES_HOME/plugins/<name>/`) and every missing-`claude` path are covered against a temporary `HERMES_HOME`, including constructing the bundled client without spawning native or accessing auth. A fresh subscription-backed AIAgent loop completed two API calls with host `read_file` execution and SQLite persistence; separate service requests accepted edited-assistant replay. Native loopback qualification also accepted 182K of tool schemas plus a 176K system prompt through file-backed settings. Loopback responses remain fixtures, not paid-model evidence.
+
+The subscription-backed task, CLI delegation, streaming, resume, denial, steering and interruption receipts are separate private artifacts. No auth data or trajectories are committed to this repository. Remaining qualification includes broader history transformations, cross-model signed replay, native versions/platforms, and adversarial steering reliability. Subscription invoice/overage reconciliation is not available from native list-price accounting.
+
+## Attribution
+
+Extracted from hermes-agent PR #105863 (`feat: add Claude Subscription DirectSDK (Experimental) provider`) by @teknium1 and @unsupportedpastels. The provider-agnostic parts of that PR (external-process provider profiles, provider-native replay carriers, setup-flow gating, picker plumbing) land in Hermes core via hermes-agent PR #117451; the provider itself lives here as a standalone plugin because Hermes does not bundle vendor-specific subscription transports in-tree. The `claude` presence checks were added during extraction.
+
+MIT licensed; see `LICENSE`.

@@ -1,0 +1,610 @@
+"""``hermes import-agent`` and ``hermes claw``: argparse trees and the preview → confirm → apply
+flow. OpenClaw runs through :mod:`.openclaw`, imported only when an OpenClaw command runs."""
+
+from __future__ import annotations
+
+import argparse
+import logging
+import os
+import re
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, NamedTuple, Optional
+
+from .importer import AGENT_DEFAULT_DIRS, SUPPORTED_AGENTS, AgentImporter, detect_agents
+
+logger = logging.getLogger(__name__)
+
+HELP = "Import an OpenClaw, Claude Code, Codex CLI, Cursor, Grok Bot or OpenBot setup into Hermes"
+DESCRIPTION = (
+    "One-command import of another agent's setup into Hermes. Maps CLAUDE.md/AGENTS.md "
+    "instructions, Cursor rules, permission allowlists, MCP servers, skills, and memories into their Hermes "
+    "equivalents; Grok Bot and OpenBot routines become cron jobs. Always shows a preview before making changes. "
+    "API keys and credentials are "
+    "never imported — run 'hermes setup' for those. OpenClaw (the former 'hermes claw migrate') "
+    "imports allowlisted secrets only with --migrate-secrets.")
+CLAW_HELP = "OpenClaw migration tools"
+CLAW_DESCRIPTION = ("Migrate settings, memories, skills, and API keys from OpenClaw to Hermes "
+                    "('hermes claw migrate' is the same as 'hermes import-agent openclaw')")
+
+OPENCLAW = "openclaw"
+GROK_BOT = "grok-bot"
+OPENBOT = "openbot"
+# Flags only the routine-carrying importers (grok-bot, openbot) understand, as (dest, "not passed").
+_ROUTINE_FLAGS = (("activate_routines", False), ("bot", None))
+# Flags only `import-agent openclaw` understands, as (dest, value meaning "not passed").
+_OPENCLAW_ONLY_FLAGS = (("preset", None), ("migrate_secrets", False), ("no_backup", False),
+                        ("workspace_target", None), ("skill_conflict", None))
+
+_ANSI = {"green": "\033[32m", "yellow": "\033[33m", "red": "\033[31m", "dim": "\033[2m",
+         "magenta": "\033[35m"}
+
+
+def _color(text: str, name: str) -> str:
+    return f"{_ANSI[name]}{text}\033[0m" if sys.stdout.isatty() and not os.environ.get("NO_COLOR") else text
+
+
+def _dirs_hint() -> str:
+    dirs = ["~/.openclaw"] + [f"~/{AGENT_DEFAULT_DIRS[a]}" for a in SUPPORTED_AGENTS]
+    return ", ".join(dirs[:-1]) + f" or {dirs[-1]}"
+
+
+class _BotTarget(NamedTuple):
+    """One Bot's own profile: where its import lands. Absent entirely when there is only one target."""
+
+    bot: str
+    profile: str
+    home: Path
+
+
+def _bot_profile_name(bot_name: str) -> str:
+    """A profile id for a Bot's own profile: ``Account Health`` → ``account-health``.
+
+    Only the slug rule lives here: whether Hermes accepts the name is the CLI's call, and a name it
+    refuses falls back to a ``-bot`` suffix in :func:`_create_bot_profile`.
+    """
+    from .grok_bot import _slug
+
+    candidate = _slug(bot_name)
+    return "default-bot" if candidate == "default" else candidate  # never the built-in profile
+
+
+_CREATED_AT_RE = re.compile(r"^Profile '(?P<name>[^']+)' created at (?P<path>.+)$", re.MULTILINE)
+_PROFILE_PATH_RE = re.compile(r"^Path:\s+(?P<path>.+)$", re.MULTILINE)
+
+
+def _profile_cli(*args: str) -> subprocess.CompletedProcess:
+    """Run ``hermes profile <args>`` in a child process, anchored to the profile this import is in.
+
+    The command line is the plugin's public seam for profiles: ``hermes_cli.profiles`` is private
+    core with no compatibility promise, so a profile is created the way a user would create it
+    rather than by calling the functions behind it. ``HERMES_HOME`` names the home the child acts
+    for (a named profile's directory included), and the platform home travels with it because the
+    profiles root is derived from it — a child left on its own would write into a different install.
+    """
+    from hermes_constants import get_hermes_home
+
+    home = get_hermes_home()
+    env = dict(os.environ, HERMES_HOME=str(home), HOME=str(Path.home()), USERPROFILE=str(Path.home()))
+    argv = [sys.executable, "-P", "-m", "hermes_cli.main", "profile", *args]
+    return subprocess.run(argv, capture_output=True, text=True, check=False, env=env)
+
+
+def _profile_home(profile: str) -> Optional[Path]:
+    """The directory ``hermes profile show <name>`` reports, or None when it cannot be read."""
+    proc = _profile_cli("show", profile)
+    found = _PROFILE_PATH_RE.search(proc.stdout or "") if proc.returncode == 0 else None
+    return Path(found.group("path").strip()).expanduser() if found else None
+
+
+def _last_line(text: str) -> str:
+    """The line of CLI output worth repeating — its error, not its progress chatter."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return lines[-1] if lines else "no output"
+
+
+def _create_bot_profile(profile: str) -> Optional[tuple[str, Path]]:
+    """Create the Bot's profile with ``hermes profile create <name> --clone``; ``(name, home)`` back.
+
+    Cloning is what lets the Bot answer a chat without more setup: this profile's ``config.yaml`` and
+    ``.env`` come along, messaging channels do not (two gateways must not fight over one bot token).
+    ``--no-alias`` keeps the footprint to the profile itself — an import should not install a wrapper
+    script per Bot unasked.
+    """
+    from hermes_cli.cli_output import print_error
+
+    for name in (profile, f"{profile}-bot"):
+        proc = _profile_cli("create", name, "--clone", "--no-alias")
+        output = f"{proc.stdout or ''}\n{proc.stderr or ''}"
+        if proc.returncode == 0:
+            created = _CREATED_AT_RE.search(proc.stdout or "")
+            home = Path(created.group("path").strip()).expanduser() if created else _profile_home(name)
+            if home is None:
+                print_error(f"Created profile '{name}' but could not read its directory back from the CLI.")
+                return None
+            # `--clone` copies this profile's SOUL.md, and a Bot's role only replaces a SOUL.md that
+            # still holds Hermes' default. Keeping the clone would send the role to memory instead —
+            # the merge #265 reports — so the profile is left without one, for the Bot to own.
+            soul = home / "SOUL.md"
+            if soul.is_file():
+                soul.unlink()
+            return name, home
+        if "already exists" in output:  # imported before: merge into it, never clobber it
+            home = _profile_home(name)
+            if home is not None:
+                return name, home
+            print_error(f"Profile '{name}' already exists, but its directory could not be read back.")
+            return None
+        if name == profile and ("is not a valid profile name" in output or "is reserved" in output):
+            continue  # the Bot's own name is refused; a `-bot` suffix is a valid id
+        print_error(f"Could not create profile '{name}': {_last_line(output)}")
+        return None
+    return None
+
+
+def _plan_per_bot_profiles(make_importer, args) -> list[_BotTarget]:
+    """One profile per Bot, when the export holds several Bots and the user takes the offer (#265).
+    Exits 1 when a profile cannot be created: the import stops instead of merging the Bots.
+
+    Imported together into one profile, only the first Bot can become SOUL.md — every later role is
+    demoted to a memory entry of the same agent, which is the bug itself. Costs nothing when the
+    export holds a single Bot, when ``--bot`` picked the Bots, or when nobody can answer.
+    """
+    from hermes_cli.cli_output import print_header, print_info, prompt_yes_no
+
+    bots = make_importer(False).load_bots()
+    if len(bots) < 2:
+        return []
+    names = [str(bot.get("name") or "").strip() or "Bot" for _, bot in bots]
+    if args.dry_run or args.yes or not sys.stdin.isatty():
+        # Creating profiles is too large a side effect to take from a prompt nobody saw.
+        print()
+        print_info(f"This export holds {len(bots)} Bots. Imported into one profile, only one role reaches "
+                   "SOUL.md and the rest become memory entries. Re-run interactively (no --dry-run, "
+                   "no -y) to give each Bot its own profile.")
+        return []
+
+    print()
+    print_header("One Profile per Bot")
+    print_info(f"{len(bots)} Bots in this export, each keeping its own identity, memories and routines:")
+    taken: set[str] = set()
+    planned: list[tuple[str, str]] = []  # (Bot, profile id): the directory is known once created
+    for bot in names:
+        profile = _bot_profile_name(bot)
+        base, n = profile, 2
+        while profile in taken:  # two Bots sharing a name still get a profile each
+            profile, n = f"{base}-{n}", n + 1
+        taken.add(profile)
+        planned.append((bot, profile))
+        print_info(f"  {bot} → profile '{profile}'")
+    if not prompt_yes_no(f"Give each of the {len(bots)} Bots its own profile (recommended)?", default=True):
+        print_info("Importing into this profile instead; later Bots' roles become memory entries.")
+        return []
+    # Created here, on the answer just given: the preview below must see the real profile homes.
+    targets: list[_BotTarget] = []
+    for bot, profile in planned:
+        made = _create_bot_profile(profile)
+        if made is None:
+            # Never fall back to one shared profile: that is the merge the user just declined.
+            print_info("Nothing was imported; re-run once the profiles above can be created.")
+            raise SystemExit(1)
+        created, home = made
+        targets.append(_BotTarget(bot=bot, profile=created, home=home))
+    print_info("Created: " + ", ".join(f"'{t.profile}'" for t in targets))
+    return targets
+
+
+def add_openclaw_migrate_flags(parser, *, defaults: bool) -> None:
+    """The ``claw migrate`` flags. ``defaults=False`` (import-agent) leaves the OpenClaw-only flags
+    at None/False so a use with another agent can be refused; openclaw.py fills the defaults."""
+    parser.add_argument(
+        "--preset", choices=["user-data", "full"], default="full" if defaults else None,
+        help="OpenClaw migration preset (default: full). Neither preset imports secrets — "
+             "pass --migrate-secrets to include API keys.")
+    parser.add_argument(
+        "--migrate-secrets", action="store_true",
+        help="OpenClaw: include allowlisted secrets (TELEGRAM_BOT_TOKEN, API keys, etc.). "
+             "Required even under --preset full.")
+    parser.add_argument(
+        "--no-backup", action="store_true",
+        help="OpenClaw: skip the pre-migration zip snapshot of the Hermes home (by default one "
+             "restore-point archive is written to its backups/ dir before apply; restorable with "
+             "'hermes import').")
+    parser.add_argument(
+        "--workspace-target", help="OpenClaw: absolute path to copy workspace instructions into")
+    parser.add_argument(
+        "--skill-conflict", choices=["skip", "overwrite", "rename"],
+        default="skip" if defaults else None,
+        help="OpenClaw: how to handle skill name conflicts (default: skip)")
+
+
+def setup_cli(parser) -> None:
+    """Attach the ``import-agent`` arguments (same spelling core shipped)."""
+    parser.add_argument(
+        "agent", nargs="?", choices=[OPENCLAW, *SUPPORTED_AGENTS, GROK_BOT, OPENBOT],
+        help=f"Which agent to import from (default: auto-detect {_dirs_hint()})")
+    parser.add_argument(
+        "--source", help=f"Path to the agent's config directory (default: {_dirs_hint()}); for "
+                         "grok-bot, the export file the Bot wrote (or a folder of them, or - to read a pasted reply "
+                         "from stdin); for openbot, its user "
+                         "data folder (the one holding openbot.db)")
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Preview only — stop after showing what would be imported")
+    parser.add_argument(
+        "--overwrite", action="store_true",
+        help="Overwrite existing Hermes items on name conflicts (default: skip)")
+    parser.add_argument("-y", "--yes", action="store_true", help="Skip confirmation prompts")
+    parser.add_argument(
+        "--sync", action="store_true",
+        help="Re-import every previously imported source whose files changed since the last "
+             "import (registered in HERMES_HOME/import-sync.json). Runs without prompts; "
+             "combine with --dry-run to preview.")
+    # `hermes setup` runs the import itself: no pointers back to setup or to flags it already chose.
+    parser.add_argument("--from-setup", action="store_true", help=argparse.SUPPRESS)
+    add_openclaw_migrate_flags(parser, defaults=False)
+    parser.add_argument(
+        "--activate-routines", action="store_true",
+        help="Grok Bot / OpenBot: create the imported cron jobs active (default: paused, so they "
+             "don't run alongside the originals until you turn those off)")
+    parser.add_argument(
+        "--bot", action="append", metavar="NAME",
+        help="Grok Bot / OpenBot: import only this Bot or agent, by name (repeatable)")
+
+
+def handle_cli(args) -> None:
+    import_agent_command(args)
+
+
+def setup_claw_cli(parser) -> None:
+    """Attach ``claw migrate`` / ``claw cleanup`` (the spelling core shipped before the move)."""
+    sub = parser.add_subparsers(dest="claw_action")
+    migrate = sub.add_parser(
+        "migrate", help="Migrate from OpenClaw to Hermes (same as 'hermes import-agent openclaw')",
+        description="Import settings, memories, skills, and API keys from an OpenClaw installation. "
+                    "Always shows a preview before making changes.")
+    migrate.add_argument("--source", help="Path to OpenClaw directory (default: ~/.openclaw)")
+    migrate.add_argument("--dry-run", action="store_true",
+                         help="Preview only — stop after showing what would be migrated")
+    migrate.add_argument(
+        "--overwrite", action="store_true",
+        help="Overwrite existing files (default: refuse to apply when the plan has conflicts)")
+    add_openclaw_migrate_flags(migrate, defaults=True)
+    migrate.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompts")
+    cleanup = sub.add_parser(
+        "cleanup", aliases=["clean"], help="Archive leftover OpenClaw directories after migration",
+        description="Scan for and archive leftover OpenClaw directories to prevent state fragmentation")
+    cleanup.add_argument("--source", help="Path to a specific OpenClaw directory to clean up")
+    cleanup.add_argument("--dry-run", action="store_true",
+                         help="Preview what would be archived without making changes")
+    cleanup.add_argument("--yes", "-y", action="store_true", help="Skip confirmation prompts")
+
+
+def handle_claw_cli(args) -> None:
+    from .openclaw import claw_command
+    claw_command(args)
+
+
+def _resolve_agent(args) -> Optional[str]:
+    """The agent named on the command line, else the one detected setup. None (reason printed)
+    when nothing is found, or several are and no --source picks one."""
+    from hermes_cli.cli_output import print_error, print_info
+
+    if args.agent:
+        return args.agent
+    from .grok_bot import detect_grok_bot
+    from .openbot import find_user_data
+    from .openclaw import _find_openclaw_dirs
+    detected = (([OPENCLAW] if _find_openclaw_dirs() else []) + detect_agents()
+                + ([GROK_BOT] if detect_grok_bot() else []) + ([OPENBOT] if find_user_data() else []))
+    if not detected:
+        print()
+        print_error(f"No supported agent setup found ({_dirs_hint()}).")
+        print_info("Specify one explicitly: hermes import-agent claude-code --source /path")
+        return None
+    if len(detected) > 1 and args.source is None:
+        print()
+        print_info("Multiple agent setups detected: " + ", ".join(detected))
+        print_info("Pick one: " + "   or   ".join(f"hermes import-agent {a}" for a in detected))
+        return None
+    return detected[0]
+
+
+def _flags_passed(args, flags) -> list[str]:
+    return ["--" + dest.replace("_", "-") for dest, unset in flags
+            if getattr(args, dest, unset) != unset]
+
+
+def import_agent_command(args) -> None:
+    """Handle ``hermes import-agent``."""
+    from hermes_cli.cli_output import (print_error, print_header, print_info, print_success,
+                                       prompt_yes_no)
+    from hermes_cli.config import get_config_path, load_config, save_config
+    from hermes_constants import display_hermes_home, get_hermes_home
+
+    if getattr(args, "sync", False):
+        from .sync import sync_imported_agents
+        sync_imported_agents(args)
+        return
+
+    agent = _resolve_agent(args)
+    if agent is None:
+        return
+    if agent == OPENCLAW:
+        from .openclaw import migrate_command
+        migrate_command(args)
+        return
+    for owners, label, flags in (((OPENCLAW,), "OpenClaw", _OPENCLAW_ONLY_FLAGS),
+                                 ((GROK_BOT, OPENBOT), "Grok Bot and OpenBot", _ROUTINE_FLAGS)):
+        if agent not in owners and (passed := _flags_passed(args, flags)):
+            print()
+            print_error(f"{', '.join(passed)} only apply to {label} imports; nothing was imported.")
+            print_info(f"Use them with: hermes import-agent {owners[0]} {' '.join(passed)} ...")
+            return
+    explicit_source, overwrite = args.source, args.overwrite
+    from_setup = getattr(args, "from_setup", False)
+    hermes_home = get_hermes_home()
+    if agent == GROK_BOT:
+        from .grok_bot import PASTED, GrokBotImporter, read_pasted_export, resolve_export_files
+        _print_banner()
+        args.pasted_text = None  # set when the reply is pasted at the prompt
+        export_files = resolve_export_files(args)
+        if not export_files:
+            return
+        pasted = args.pasted_text or (read_pasted_export() if export_files == [PASTED] else None)
+        source_label = ", ".join(str(p) for p in export_files)
+
+        def make_importer(execute: bool, target: Optional[_BotTarget] = None):
+            """The Grok Bot importer; ``target`` points it at one Bot's own profile."""
+            return GrokBotImporter(export_files, (target.home if target else hermes_home).resolve(),
+                                   execute=execute, overwrite=overwrite,
+                                   activate_routines=args.activate_routines,
+                                   bot_names=([target.bot] if target else args.bot) or (), pasted=pasted)
+    elif agent == OPENBOT:
+        from .openbot import OpenBotImporter, find_user_data
+        _print_banner()
+        user_data = find_user_data(Path(explicit_source).expanduser() if explicit_source else None)
+        if user_data is None:
+            print()
+            print_error("OpenBot's data folder (with openbot.db) was not found"
+                        + (f" at {explicit_source}" if explicit_source else "") + ".")
+            print_info("Point at it: hermes import-agent openbot --source '<OpenBot user data folder>'")
+            raise SystemExit(1)
+        source_label = str(user_data)
+
+        def make_importer(execute: bool, target: Optional[_BotTarget] = None):
+            return OpenBotImporter(user_data, hermes_home.resolve(), execute=execute, overwrite=overwrite,
+                                   activate_routines=args.activate_routines, bot_names=args.bot or ())
+    else:
+        source_dir = Path(explicit_source or Path.home() / AGENT_DEFAULT_DIRS[agent])
+        _print_banner()
+        if not source_dir.is_dir():
+            print()
+            print_error(f"Agent directory not found: {source_dir}")
+            print_info(f"Specify a custom path: hermes import-agent {agent} --source /path/to/{AGENT_DEFAULT_DIRS[agent]}")
+            raise SystemExit(1)
+        source_label = str(source_dir)
+
+        def make_importer(execute: bool, target: Optional[_BotTarget] = None):
+            return AgentImporter(agent, source_dir.resolve(), hermes_home.resolve(),
+                                 execute=execute, overwrite=overwrite)
+
+    print()
+    print_header("Import Settings")
+    print_info(f"Agent:       {agent}")
+    print_info(f"Source:      {source_label}")
+    print_info(f"Target:      {hermes_home}")
+    print_info(f"Overwrite:   {'yes' if overwrite else 'no (skip conflicts)'}")
+    print_info("Secrets:     never imported" + ("" if from_setup else " — run 'hermes setup' for credentials"))
+    # Ensure config.yaml exists before the import tries to merge into it
+    if not get_config_path().exists():
+        save_config(load_config())
+
+    targets: list[Optional[_BotTarget]] = [None]
+    if agent == GROK_BOT and not from_setup and not args.bot:
+        # Several Bots in one export have no single identity to be: offer each its own profile (#265).
+        per_bot = _plan_per_bot_profiles(make_importer, args)
+        if per_bot:
+            targets = list(per_bot)
+
+    def importer_for(execute: bool, target: Optional[_BotTarget]):
+        return make_importer(execute) if target is None else make_importer(execute, target)
+
+    def run_imports(execute: bool, phase: str
+                    ) -> Optional[list[tuple[Optional[_BotTarget], dict[str, Any]]]]:
+        """Run the importer for every target; on failure print the error and return None."""
+        done: list[tuple[Optional[_BotTarget], dict[str, Any]]] = []
+        for target in targets:
+            try:
+                done.append((target, importer_for(execute, target).run()))
+            except Exception as e:
+                print()
+                print_error(f"Import{phase} failed: {e}")
+                logger.debug(f"import-agent{phase} error", exc_info=True)
+                return None
+        return done
+
+    def combined(reports: list[tuple[Optional[_BotTarget], dict[str, Any]]]) -> dict[str, int]:
+        return {key: sum(r.get("summary", {}).get(key, 0) for _, r in reports)
+                for key in ("imported", "conflict", "skipped", "error")}
+
+    # Phase 1: preview (always)
+    preview = run_imports(False, " preview")
+    if preview is None:
+        raise SystemExit(1)
+    summary = combined(preview)
+    if summary.get("imported", 0) == 0 and summary.get("conflict", 0) == 0:
+        print()
+        print_info(f"Nothing to import from {agent}.")
+        for target, report in preview:
+            _print_target_heading(target)
+            print_import_report(report, dry_run=True, from_setup=from_setup)
+        if summary.get("error"):  # e.g. an export refused for carrying credentials
+            raise SystemExit(1)
+        return
+    print()
+    print_header(f"Import Preview — {summary.get('imported', 0)} item(s) would be imported")
+    print_info("No changes have been made yet. Review the list below:")
+    for target, report in preview:
+        _print_target_heading(target)
+        print_import_report(report, dry_run=True, from_setup=from_setup)
+    if args.dry_run:
+        return
+
+    # Phase 2: confirm and execute
+    print()
+    if not args.yes:
+        if not sys.stdin.isatty():
+            print_info("Non-interactive session — preview only.")
+            again = f" --source {shlex.quote(explicit_source)}" if explicit_source else ""
+            print_info(f"To execute, re-run with: hermes import-agent {agent}{again} --yes"
+                       + (" (piping the reply in again)" if explicit_source == "-" else ""))
+            return
+        if not prompt_yes_no("Proceed with import?", default=True):
+            print_info("Import cancelled.")
+            if any(target is not None for target in targets):
+                print_info("The profiles created above stay; nothing was imported into them.")
+            return
+    applied = run_imports(True, "")
+    if applied is None:
+        raise SystemExit(1)
+    for target, report in applied:
+        _print_target_heading(target)
+        print_import_report(report, dry_run=False, from_setup=from_setup)
+        if agent in (GROK_BOT, OPENBOT):
+            _print_routine_next_steps(report, "Grok Bot" if agent == GROK_BOT else "OpenBot",
+                                      profile=target.profile if target else None)
+    if agent not in (GROK_BOT, OPENBOT):
+        _register_for_sync(agent, source_dir, hermes_home, overwrite, applied[0][1])
+    print()
+    if errors := combined(applied).get("error"):
+        print_error(f"Import finished with {errors} error(s); see the list above.")
+    else:
+        print_success("Import complete.")
+    if any(target is not None for target, _ in applied):
+        print_info("Each Bot has its own profile now: 'hermes -p <profile> chat' talks to it.")
+    if from_setup:
+        print_info("API keys and credentials were NOT imported.")
+    else:
+        print_info("API keys and credentials were NOT imported — run 'hermes setup' "
+                   f"to configure providers, or add them to {display_hermes_home()}/.env.")
+    if combined(applied).get("error"):
+        raise SystemExit(1)
+
+
+def _print_banner() -> None:
+    print()
+    print(_color("┌─────────────────────────────────────────────────────────┐", "magenta"))
+    print(_color("│          ☤ Hermes — Import From Another Agent          │", "magenta"))
+    print(_color("└─────────────────────────────────────────────────────────┘", "magenta"))
+
+
+def _print_target_heading(target: Optional[_BotTarget]) -> None:
+    """Name the Bot whose report follows (one-profile-per-Bot); silent for the single-target import."""
+    if target is not None:
+        from hermes_cli.cli_output import print_header
+        print()
+        print_header(f"{target.bot} → profile '{target.profile}'")
+
+
+def _print_routine_next_steps(report: dict[str, Any], product: str,
+                              profile: Optional[str] = None) -> None:
+    """Grok and OpenBot imports are one-off (not sync sources); say how to switch the routines over.
+
+    ``profile`` names the profile the jobs landed in when that is not the one running the import:
+    ``hermes cron resume`` acts on the *caller's* cron store, so a hint without the selector fails
+    as printed (#265).
+    """
+    from hermes_cli.cli_output import print_info
+    from hermes_constants import get_hermes_home, profile_cli_selector
+
+    jobs = [i for i in report.get("items", []) if i.get("kind") == "routine" and i.get("status") == "imported"]
+    paused = [i for i in jobs if i.get("paused")]
+    if paused:
+        print()
+        print_info(f"{len(paused)} routine(s) were created PAUSED so they don't run twice. Once you turn "
+                   f"the routine off in {product}, resume its copy here:")
+        # Pin the hint to the profile the jobs landed in, so the command works when pasted anywhere
+        # (#265): a resume typed from another profile touches that profile's cron store instead.
+        # A per-Bot import names that profile outright; otherwise it is the one the import runs in.
+        selector = f"-p {profile} " if profile else (
+            profile_cli_selector() if _is_named_profile(get_hermes_home()) else "")
+        for item in paused:
+            print_info(f"  hermes {selector}cron resume {item.get('job_id')}    # {item.get('destination')}")
+    if jobs:
+        for item in jobs:
+            deliver = str(item.get("deliver") or "local")
+            if deliver != "local":
+                print_info(f"  {item.get('destination')}: results are delivered to {deliver}.")
+        local = [i for i in jobs if str(i.get("deliver") or "local") == "local"]
+        if local:
+            # No delivery target: name where the output actually lands, per job (#264) — in the
+            # profile the jobs were imported into, which need not be the one running the import.
+            output = Path(report.get("target") or ".") / "cron" / "output"
+            for item in local:
+                print_info(f"  {item.get('destination')}: results land in "
+                           f"{output / str(item.get('job_id') or '<id>')}/ — "
+                           f"to have them sent somewhere: hermes cron edit {item.get('job_id')} "
+                           f"--deliver <platform>")
+
+
+def _is_named_profile(home: Path) -> bool:
+    """True when *home* is a named profile's directory (``<root>/profiles/<name>``), not the default."""
+    from hermes_constants import profile_name_for_home
+    name = profile_name_for_home(home)
+    return bool(name) and name != "default"
+
+
+def _register_for_sync(agent: str, source_dir: Path, hermes_home: Path, overwrite: bool,
+                       report: dict[str, Any]) -> None:
+    from hermes_cli.cli_output import print_info
+
+    from .sync import update_sync_manifest
+    try:
+        update_sync_manifest(agent, source_dir.resolve(), hermes_home.resolve(), overwrite, report)
+        print_info("Source registered for sync — re-run 'hermes import-agent --sync' "
+                   "any time to pull in changes.")
+    except OSError as exc:
+        logger.warning("Could not update import sync manifest: %s", exc)
+
+
+def print_import_report(report: dict[str, Any], dry_run: bool, from_setup: bool = False) -> None:
+    """Print a formatted per-item import report."""
+    from hermes_cli.cli_output import print_header, print_info
+    from hermes_constants import display_hermes_home
+
+    print()
+    print_header("Dry Run Results" if dry_run else "Import Results")
+    if dry_run:
+        print_info("No files were modified. This is a preview of what would happen.")
+    print()
+    # (status, colour, group heading, summary label)
+    groups = (
+        ("imported", "green", "✓ Would import" if dry_run else "✓ Imported",
+         "would import" if dry_run else "imported"),
+        ("conflict", "yellow", "⚠ Conflicts (skipped — use --overwrite to force)", "conflict(s)"),
+        ("skipped", "dim", "─ Skipped", "skipped"),
+        ("error", "red", "✗ Errors", "error(s)"))
+    for status, col, label, _ in groups:
+        group_items = [i for i in report.get("items", []) if i.get("status") == status]
+        if not group_items:
+            continue
+        print(_color(f"  {label}:", col))
+        for item in group_items:
+            tail = ("→ " + str(item.get("destination") or "").replace(str(Path.home()), "~")
+                    if status == "imported" else f" {item.get('reason', '')}")
+            print(f"      {item.get('kind', 'unknown'):<22s} {tail}")
+        print()
+    if stripped := report.get("stripped_secrets"):
+        print(_color("  ⚷ Secrets stripped (never imported):", "yellow"))
+        for name in stripped:
+            print(f"      {name}")
+        print_info(f"Re-add them deliberately in {display_hermes_home()}/.env." if from_setup
+                   else "Re-add credentials deliberately via 'hermes setup' or the profile's .env.")
+        print()
+    summary = report.get("summary", {})
+    parts = [f"{summary[k]} {label}" for k, _, _, label in groups if summary.get(k)]
+    if parts:
+        print_info(f"Summary: {', '.join(parts)}")

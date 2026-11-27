@@ -75,10 +75,12 @@ public class RepoLibraryActivity extends Activity {
             if (p == null) continue;
             total += p.optInt("count", 0);
             bytes += p.optLong("bytes", 0);
+            String src = p.optString("source", "");
             rows.add(new Object[]{"📦  " + p.optString("name", "?"),
-                    p.optInt("count", 0) + " ملفًا  ·  " + human(p.optLong("bytes", 0))});
+                    src.isEmpty() ? (p.optInt("count", 0) + " ملفًا  ·  " + human(p.optLong("bytes", 0)))
+                                  : (src + "  ·  " + p.optInt("count", 0) + " ملفًا  ·  " + human(p.optLong("bytes", 0)))});
         }
-        sub.setText(total + " ملفًا · " + human(bytes) + " · 8 مشاريع");
+        sub.setText(total + " ملفًا · " + human(bytes) + " · " + projects.length() + " " + getString(R.string.repo_projects_count));
         adapter.notifyDataSetChanged();
     }
 

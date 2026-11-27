@@ -1,0 +1,26 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "rea": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "rea-agents@6.7.0",
+        "mcp"
+      ],
+      "env": {
+        "REA_GHIDRA_STARTUP_TIMEOUT_MS": "900000",
+        "REA_PWNTOOLS_PYTHON": "${REA_PWNTOOLS_PYTHON}",
+        "REA_ANALYSIS_PROVIDER": "${REA_ANALYSIS_PROVIDER}",
+        "GHIDRA_INSTALL_DIR": "${GHIDRA_INSTALL_DIR}",
+        "JAVA_HOME": "${JAVA_HOME}",
+        "REA_KUNA_COMMAND": "${REA_KUNA_COMMAND}",
+        "REA_TSHARK_COMMAND": "${REA_TSHARK_COMMAND}",
+        "REA_CAPINFOS_COMMAND": "${REA_CAPINFOS_COMMAND}",
+        "REA_SIGROK_COMMAND": "${REA_SIGROK_COMMAND}",
+        "REA_WABT_BIN_DIRECTORY": "${REA_WABT_BIN_DIRECTORY}"
+      }
+    }
+  }
+}

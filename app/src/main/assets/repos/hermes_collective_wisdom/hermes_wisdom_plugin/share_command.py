@@ -1,0 +1,362 @@
+"""One-shot terminal adapter over the existing exact-hash publication workflow."""
+from __future__ import annotations
+
+import base64
+import json
+import shlex
+import sys
+
+from .errors import ShareCopyError, WisdomAuthError, WisdomError, WisdomNotFound, WisdomConflict
+from .package import PackagePolicyError
+from .portal_urls import safe_portal_url
+from .terminal_ui import (
+    edit_prepared, gateway_findings, has_reviewable_warnings, render_file_preview,
+    render_findings, render_gateway_findings, render_inventory, review_identity,
+    safe_scan_details, text,
+)
+
+_AWAITING_REVIEW = frozenset({"policy_review_required", "approval_rejected"})
+
+
+def _result(outcome, skill, detail, version=None, portal_url=None):
+    return {"outcome": outcome, "skill": skill, "version": version,
+            "portal_url": safe_portal_url(portal_url), "detail": detail}
+
+
+def _catalog(service, skill):
+    try:
+        return service.show(skill)
+    except WisdomNotFound:
+        return {}
+
+
+def _latest(detail):
+    return (detail.get("latest_version_detail") or {}).get("version") or {}
+
+
+def _already_shared(prepared, detail, owner):
+    skill = detail.get("skill") or {}
+    latest = _latest(detail)
+    hashes = prepared["hashes"]
+    return (
+        skill.get("state") == "active"
+        and skill.get("created_by_user_id") == owner["account_id"]
+        and isinstance(latest.get("version"), int)
+        and all(latest.get(remote) == hashes[local] for remote, local in (
+            ("content_hash", "content"), ("author_description_hash", "author_description"),
+            ("package_manifest_hash", "package_manifest"),
+        ))
+    )
+
+
+def _screen(prepared, owner, detail, mode):
+    team = text(owner["organization_id"])
+    title = text(prepared.get("editorial_name") or prepared.get("slug") or "Local skill")
+    version = _latest(detail).get("version")
+    version_line = f"v{version} → v{version + 1}" if isinstance(version, int) else "New skill (v1)"
+    visibility = (f"Everyone in {team}, immediately. No reviewer." if mode == "open"
+                  else "Team review required; not immediately available.")
+    print(f'Share "{title}"\nTeam        {team}\nVisibility  {visibility}'
+          f'\nVersion     {version_line}')
+    print(text(prepared.get("description") or "", limit=4096))
+    if prepared.get("copy_provenance_line"):
+        print(text(prepared["copy_provenance_line"]))
+        labels = {"editorial_name": "name", "editorial_description": "description"}
+        original = prepared.get("copy_original") or {}
+        for key in prepared.get("copy_written_by_hermes") or []:
+            if key in labels:
+                print(f"Original {labels[key]} in SKILL.md: "
+                      + text(original.get(key) or "(missing)", limit=4096))
+    inventory = {**prepared, "files": [
+        {**item, "size": len(base64.b64decode(item["content_base64"], validate=True))}
+        for item in prepared["files"]
+    ]}
+    print(render_inventory(inventory).replace("[executable]", "[script]"))
+    print(render_findings(prepared))
+    gateway = render_gateway_findings(prepared)
+    if gateway:
+        print(f"Gateway findings ({len(gateway_findings(prepared))})\n{gateway}")
+        print("Already uploaded; not shared until you confirm.")
+        return
+    print("Server scan runs on submit. Nothing has been uploaded.")
+
+
+def _warnings(args, prepared):
+    """Return False (none), True (acknowledged) or None (acknowledgement required).
+
+    For Gateway findings an acknowledgement is a hash: the exact evidence this
+    invocation printed and the owner confirmed, or, for ``--accept-warnings``,
+    the evidence a previous invocation printed (``gateway_evidence_shown``).
+    """
+    gateway = prepared.get("review_required") == "gateway_advisory"
+    if not has_reviewable_warnings(prepared) and not gateway:
+        return False
+    if has_reviewable_warnings(prepared) and not safe_scan_details(prepared.get("local_scan")):
+        raise WisdomConflict("Scanner warning details are unavailable; sharing is blocked")
+    if args.accept_warnings:
+        return prepared.get("gateway_evidence_shown") or "" if gateway else True
+    if args.json or args.yes or not sys.stdin.isatty():
+        return None
+    print(render_gateway_findings(prepared) if gateway else render_findings(prepared))
+    question = ("Acknowledge the displayed Gateway findings for this exact package? [y/N] "
+                if gateway else
+                "Acknowledge the displayed scanner warnings for this exact package? [y/N] ")
+    answer = input(question)
+    if answer.strip().lower() not in {"y", "yes", "a"}:
+        return None
+    return prepared.get("gateway_evidence_hash") or "" if gateway else True
+
+
+def _mark_shown(service, result):
+    """Record the Gateway evidence the caller has now received.
+
+    Called only after the output carrying that evidence was written and flushed,
+    so a failed write, kill or emit error leaves nothing recorded and a later
+    ``--accept-warnings`` run shows the findings again instead of acknowledging.
+    """
+    operation_id, evidence = result.get("operation_id"), result.get("gateway_evidence_hash")
+    record = getattr(service, "publication_gateway_shown", None)
+    if callable(record) and isinstance(operation_id, str) and isinstance(evidence, str):
+        try:
+            record(operation_id, evidence)
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Unrecorded evidence is shown again next time; nothing is acknowledged.
+            pass
+
+
+def _view_file(prepared):
+    print(render_inventory(prepared))
+    answer = input("View file number (Enter to return): ").strip()
+    if answer.isdigit() and 0 < int(answer) <= len(prepared["files"]):
+        print(render_file_preview(prepared["files"][int(answer) - 1]))
+
+
+def _edit_description(service, draft_id):
+    payload = service.prepared_inspect(draft_id)
+    description = input("Description (Enter to keep current): ").strip()
+    if description:
+        service.prepared_save(
+            draft_id, author_description=description, files=payload["files"],
+            expected_hashes=payload["expected_hashes"],
+        )
+
+
+def _navigate(action, service, review):
+    if action == "v":
+        _view_file(review)
+    if action == "e":
+        _edit_description(service, review["draft_id"])
+    if action == "f":
+        edit_prepared(service, review["draft_id"])
+
+
+def _gateway_changed(accepted, current):
+    """True when a Gateway acknowledgement does not name exactly the current evidence."""
+    return isinstance(accepted, str) and (not accepted or accepted != current)
+
+
+def _review(args, service, prepared, owner, detail):
+    """Warn separately, then present exactly the receipt that Share will consume.
+
+    An operation awaiting review is re-reviewed by its id; its submitted local
+    draft is immutable, so only viewing files is offered. Gateway findings are
+    acknowledged by evidence hash: when the live evidence is not exactly what was
+    shown, nothing is submitted and the new findings are returned instead.
+    """
+    draft_id = prepared["draft_id"]
+    operation_id = prepared.get("operation_id")
+    target = operation_id or draft_id
+    while True:
+        accepted = _warnings(args, prepared)
+        if accepted is None:
+            return None, "warnings_required"
+        # An acknowledgement of other evidence than shown never reaches the service.
+        review = (prepared if _gateway_changed(accepted, prepared.get("gateway_evidence_hash"))
+                  else service.publication_review(target, accept_warnings=accepted is not False))
+        if _gateway_changed(accepted, review.get("gateway_evidence_hash")):
+            return review, "gateway_review_required"
+        if review_identity(prepared) != review_identity(review):
+            raise WisdomConflict("Package or scanner findings changed; review again")
+        if not args.json:
+            _screen(review, owner, detail, review["publication_mode"])
+        if args.yes:
+            return review, None
+        if args.json or not sys.stdin.isatty():
+            return None, "confirmation_required"
+        action = input(("[v] View a file   " if operation_id else
+                        "[v] View a file   [e] Edit description   [f] Edit files   ")
+                       + "[s] Share   [q] Cancel\n> ").strip().lower()
+        if action in {"", "q"}:
+            return None, "cancelled"
+        if action == "s":
+            return review, None
+        if operation_id:
+            if action == "v":
+                _view_file(review)
+            # The screen above printed exactly this evidence.
+            prepared = {**review, "gateway_evidence_shown": review.get("gateway_evidence_hash")}
+            continue
+        _navigate(action, service, review)
+        # No warning acceptance survives editing or a new review.
+        args.accept_warnings = False
+        prepared = service.prepared_review(draft_id, allow_model_review=False)
+
+
+def _outcome(result, skill, team):
+    operation = shlex.quote(text(result.get("operation_id") or skill))
+    if result.get("code") == "scan_blocked":
+        return _result("blocked_by_scan", skill,
+                       "Not shared. The server scan blocked this package. "
+                       "Review the findings with: hermes wisdom publication status " + operation), 1
+    if result.get("code") == "slug_owned":
+        return _result("slug_owned", skill,
+                       f'"{text(skill)}" is already shared by another author. '
+                       "Rename your skill."), 1
+    if (result.get("state"), result.get("publication_state")) == ("done", "published"):
+        publication = result.get("publication_result") or {}
+        version = publication.get("version")
+        label = f" as v{version}" if isinstance(version, int) else ""
+        return _result("shared", skill, f"Shared with {team}{label}", version), 0
+    if (result.get("state"), result.get("publication_state")) == ("done", "pending_moderation"):
+        return _result("pending_moderation", skill,
+                       "Submitted for team review; not shared yet."), 0
+    if result.get("review_required") == "gateway_advisory":
+        findings = render_gateway_findings(result)
+        return _result("gateway_review_required", skill,
+                       "Not shared yet. Gateway checks found items to review:\n"
+                       + (findings or "(no details reported)")
+                       + "\nAcknowledge them and finish with: hermes wisdom share "
+                       + shlex.quote(text(skill)) + " --accept-warnings"), 1
+    return _result("uncertain", skill, "We could not confirm the result. Nothing will be resent. "
+                   "Check with: hermes wisdom publication status " + operation), 2
+
+
+def _submit(service, receipt, skill):
+    try:
+        return service.publication_submit(receipt)
+    except WisdomError:
+        raise
+    except Exception:  # pylint: disable=broad-exception-caught
+        return {"state": "uncertain", "operation_id": skill}
+
+
+def _stopped(args, owner, review, stop, shown):
+    """The result of a review that ended without submitting anything."""
+    if stop == "gateway_review_required" and review is not None:
+        # The live Gateway evidence is not what was shown: show it; submit nothing.
+        result = _outcome({**review, "review_required": "gateway_advisory"},
+                          args.skill, text(owner["organization_id"]))
+        shown.append(review)
+        return result
+    messages = {
+        "cancelled": "Sharing cancelled. Nothing has been uploaded.",
+        "warnings_required": "Not shared. Review the warnings, then use --accept-warnings.",
+        "confirmation_required": "Nothing shared. To confirm, run: hermes wisdom share "
+                                 + shlex.quote(args.skill) + " --yes",
+    }
+    return _result(stop, args.skill, messages[stop]), 0 if stop == "cancelled" else 1
+
+
+def _share(args, service, shown):
+    """Run one share; Gateway evidence in the result is appended to ``shown``."""
+    owner = service.binding()
+    pending = service.share_status(args.skill)
+    operation_id = None
+    if pending is not None:
+        if pending.get("phase") not in _AWAITING_REVIEW or not pending.get("operation_id"):
+            return _outcome(pending, args.skill, text(owner["organization_id"]))
+        # Finish the earlier share's retained operation; never prepare a duplicate.
+        operation_id = str(pending["operation_id"])
+        if pending.get("review_required") == "gateway_advisory":
+            # Display only: acknowledgement is re-bound to live Gateway evidence below.
+            prepared = service.publication_gateway_review(operation_id)
+            if not isinstance(prepared, dict):
+                prepared = service.publication_review(operation_id)
+        else:
+            prepared = service.publication_review(operation_id)
+        if prepared.get("operation_id") != operation_id:
+            raise WisdomConflict("The earlier share changed; check publication status")
+    else:
+        prepared = service.suggest(args.skill, allow_model_review=False)
+        if prepared.get("editorial_problem"):
+            # The skill's own name or description cannot be shared as written.
+            return _result("copy_incomplete", args.skill,
+                           text(prepared["editorial_problem"], limit=4096)), 1
+    prepared = {**prepared, "slug": args.skill}
+    detail = _catalog(service, args.skill)
+    if operation_id is None and _already_shared(prepared, detail, owner):
+        version = _latest(detail)["version"]
+        return _result("already_shared", args.skill,
+                       f"Nothing to share: v{version} already matches your local skill",
+                       version, detail.get("portal_url")), 0
+    review, stop = _review(args, service, prepared, owner, detail)
+    if stop:
+        return _stopped(args, owner, review, stop, shown)
+    assert review is not None
+    result = _submit(service, review["receipt"], args.skill)
+    outcome, code = _outcome(result, args.skill, text(owner["organization_id"]))
+    if outcome["outcome"] == "gateway_review_required":
+        shown.append(result)
+    _after_submit(service, args.skill, outcome)
+    return outcome, code
+
+
+def _after_submit(service, skill, outcome):
+    """Add the best-effort Portal link to a shared outcome."""
+    if outcome["outcome"] == "shared":
+        # Publication success is independent of optional post-submit link discovery.
+        try:
+            published = _catalog(service, skill)
+            outcome["portal_url"] = safe_portal_url(published.get("portal_url"))
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Publication is already authoritative; link discovery is best effort.
+            pass
+
+
+def _emit_result(args, result):
+    if args.json:
+        print(json.dumps(result, ensure_ascii=True))
+    else:
+        print(result["detail"])
+        if result["portal_url"]:
+            print("Portal   " + result["portal_url"])
+        if result["outcome"] == "shared":
+            name = shlex.quote(text(args.skill))
+            print(f"Install  hermes wisdom install {name}")
+    # The caller has the result only once it is flushed; a failure raises here.
+    sys.stdout.flush()
+
+
+def run_share(args, service):
+    """Print one stable JSON envelope or the human screen/outcome; never auto-retry."""
+    shown = []
+    try:
+        result, code = _share(args, service, shown)
+    except WisdomAuthError:
+        result, code = _result("not_entitled", args.skill,
+                              "Collective Wisdom is not enabled for this account and team"), 1
+    except ShareCopyError as exc:
+        # The skill's own copy cannot be shared and Hermes could not propose it.
+        result, code = _result("copy_incomplete", args.skill, text(exc, limit=4096)), 1
+    except WisdomError as exc:
+        if exc.code in {"slug_owned", "scan_blocked"}:
+            result, code = _outcome({"code": exc.code}, args.skill, "")
+        else:
+            result, code = _result("not_shared", args.skill, text(exc, limit=4096)), 1
+    except PackagePolicyError as exc:
+        result, code = _result("invalid_package", args.skill,
+                              f"Can't share {text(args.skill)}: {text(exc)}. "
+                              "Shared skills can contain text and scripts only."), 1
+    except (KeyboardInterrupt, EOFError):
+        result, code = _result("cancelled", args.skill, "Sharing cancelled."), 1
+    except Exception:  # pylint: disable=broad-exception-caught
+        result, code = _result(
+            "not_shared", args.skill,
+            "Sharing could not complete. Inspect hermes wisdom status before trying again.",
+        ), 1
+    _emit_result(args, result)
+    if result["outcome"] == "gateway_review_required":
+        # Recorded only now that the caller has received exactly this evidence.
+        for evidence in shown:
+            _mark_shown(service, evidence)
+    return code

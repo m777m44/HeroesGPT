@@ -8,22 +8,27 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="@drawable/bg_devil_aura"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="20dp"
         android:paddingEnd="20dp"
         android:paddingTop="16dp"
-        android:paddingBottom="8dp">
+        android:paddingBottom="12dp">
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="HEROES GPT ⚔ ARENA"
+            android:text="HEROESGPT ⚔ SHADOW ARENA"
             android:textColor="@color/gold"
-            android:textSize="22sp"
+            android:textSize="21sp"
             android:textStyle="bold"
-            android:letterSpacing="0.08" />
+            android:shadowColor="#99E6284C"
+            android:shadowDx="0"
+            android:shadowDy="0"
+            android:shadowRadius="22"
+            android:letterSpacing="0.06" />
 
         <Button
             android:id="@+id/header_sources"

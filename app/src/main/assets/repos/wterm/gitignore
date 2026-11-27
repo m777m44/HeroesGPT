@@ -1,0 +1,19 @@
+zig-out/
+.zig-cache/
+*.wasm
+!packages/@wterm/core/wasm/wterm.wasm
+.DS_Store
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+.next/
+next-env.d.ts
+packages/@wterm/core/src/wasm-inline.ts
+coverage/
+test-results/
+playwright-report/
+
+# env files
+.env*
+!.env.example

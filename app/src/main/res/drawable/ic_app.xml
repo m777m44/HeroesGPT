@@ -2,7 +2,19 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp" android:height="48dp"
     android:viewportWidth="48" android:viewportHeight="48">
-    <path android:fillColor="#0A0A12" android:pathData="M0,0h48v48h-48z" />
-    <path android:fillColor="#E8B44A" android:pathData="M26,4 L21,20 L33,22 L18,44 L23,26 L11,24 Z" />
-    <path android:fillColor="#5B8DEF" android:pathData="M34,30 L35.6,34.4 L40,36 L35.6,37.6 L34,42 L32.4,37.6 L28,36 L32.4,34.4 Z" />
+    <!-- Shadow Devil: abyss background -->
+    <path android:fillColor="#07070B" android:pathData="M0,0h48v48h-48z" />
+    <!-- dark aura -->
+    <path android:fillColor="#1B0A18" android:pathData="M24,4 a20,20 0 1,0 0.001,0 z" />
+    <!-- left horn -->
+    <path android:fillColor="#E6284C" android:pathData="M8,10 C12,12 15,16 16,22 L11,18 C9,15 8,12 8,10 Z" />
+    <!-- right horn -->
+    <path android:fillColor="#E6284C" android:pathData="M40,10 C36,12 33,16 32,22 L37,18 C39,15 40,12 40,10 Z" />
+    <!-- shadow face -->
+    <path android:fillColor="#12121C" android:pathData="M14,18 C18,15 30,15 34,18 C36,24 34,30 30,34 L28,30 L26,35 L24,30 L22,35 L20,30 L18,34 C14,30 12,24 14,18 Z" />
+    <!-- glowing eyes -->
+    <path android:fillColor="#FF6B35" android:pathData="M17,22 L23,23 L22,26 L17,24 Z" />
+    <path android:fillColor="#FF6B35" android:pathData="M31,22 L25,23 L26,26 L31,24 Z" />
+    <!-- ember spark -->
+    <path android:fillColor="#9D4EDD" android:pathData="M38,34 L39.2,37 L42,38 L39.2,39 L38,42 L36.8,39 L34,38 L36.8,37 Z" />
 </vector>

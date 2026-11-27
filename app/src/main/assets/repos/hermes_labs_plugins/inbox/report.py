@@ -1,0 +1,230 @@
+"""Assemble the inbox snapshot and render it as text."""
+
+from __future__ import annotations
+
+import json
+import time
+from pathlib import Path
+from typing import Any, Optional
+
+from . import collectors as c
+
+# Source name -> what the user sees in the "not read" footer.
+SOURCE_LABELS = {
+    "processes": "background processes (processes.json)",
+    "delegations": "async delegations (state.db)",
+    "loops": "loops (state.db)",
+    "cron": "cron jobs (cron/jobs.json)",
+    "sessions": "open sessions (runtime/active_sessions.json)",
+    "kanban": "kanban board (kanban.db)",
+}
+
+_STALLED_DELEGATION_STATES = ("stalling", "stalled", "unknown")
+_RUNNING_DELEGATION_STATES = ("running", "finalizing")
+
+
+def build_inbox(home: Optional[Path] = None, decisions: bool = False) -> dict[str, Any]:
+    """The full snapshot as JSON-serialisable data. ``home`` defaults to the active profile's."""
+    if home is None:
+        from hermes_constants import get_hermes_home
+
+        home = get_hermes_home()
+    processes, n_proc = c.collect_processes(home)
+    delegations, n_del = c.collect_delegations(home)
+    loops, n_loop = c.collect_loops(home)
+    cron_jobs, n_cron = c.collect_cron(home)
+    sessions, n_sess = c.collect_sessions(home)
+    kanban, n_kan = c.collect_kanban()
+    # Opt-in (#59): the decision text behind a blocked task, not just the fact that it is blocked.
+    decision_items, n_dec = c.collect_decisions() if decisions else ([], None)
+
+    attention: list[dict[str, Any]] = []
+    attention += [d for d in delegations
+                  if d["state"] in _STALLED_DELEGATION_STATES or d["delivery_state"] == "dropped"]
+    # A paused loop stopped on its own (max ticks, failed turn) and an overdue one has no driver:
+    # both are in flight on paper only. Any other non-active status is unknown, not healthy.
+    attention += [loop for loop in loops
+                  if loop["status"] != "active" or loop.get("overdue_seconds") is not None]
+    attention += [j for j in cron_jobs if j["needs_attention"] or (j["paused"] and j["paused_reason"])]
+    # Checkpointed as running but the PID is gone: an orphaned entry from an owner that crashed.
+    attention += [p for p in processes if p["alive"] is False]
+    attention += [t for t in kanban if t["status"] in ("blocked", "review")]
+
+    in_progress: list[dict[str, Any]] = []
+    in_progress += [p for p in processes if p["alive"] is not False]
+    in_progress += [d for d in delegations if d["state"] in _RUNNING_DELEGATION_STATES]
+    in_progress += [loop for loop in loops
+                    if loop["status"] == "active" and loop.get("overdue_seconds") is None]
+    in_progress += [t for t in kanban if t["status"] == "running"]
+
+    finished = [d for d in delegations
+                if d["state"] not in c.LIVE_DELEGATION_STATES and d["delivery_state"] == "pending"]
+
+    data = {
+        "generated_at": time.time(),
+        "home": str(home),
+        "attention": attention,
+        "in_progress": in_progress,
+        "finished_undelivered": finished,
+        "cron": cron_jobs,
+        "sessions": sessions,
+        "sources": {
+            name: note or "read"
+            for name, note in (("processes", n_proc), ("delegations", n_del), ("loops", n_loop),
+                               ("cron", n_cron), ("sessions", n_sess), ("kanban", n_kan))
+        },
+    }
+    if decisions:
+        data["decisions"] = decision_items
+        data["sources"]["decisions"] = n_dec or "read"
+    return data
+
+
+def fmt_age(seconds: Any) -> str:
+    # bool is an int: a JSON duration that is a flag (``true``) would otherwise print a
+    # plausible "1s" instead of the unknown marker used for real non-durations.
+    if not isinstance(seconds, (int, float)) or isinstance(seconds, bool):
+        return "?"
+    s = int(max(0, seconds))
+    if s < 60:
+        return f"{s}s"
+    m = s // 60
+    if m < 60:
+        return f"{m}m"
+    h, m = divmod(m, 60)
+    if h < 24:
+        return f"{h}h{m:02d}m"
+    d, h = divmod(h, 24)
+    return f"{d}d{h}h"
+
+
+def _describe_process(item: dict[str, Any], now: float) -> str:
+    alive = item.get("alive")
+    state = "running" if alive else "GONE (stale checkpoint)" if alive is False else "sandboxed"
+    return f"process {item['id']}  [{state}, {fmt_age(item.get('age_seconds'))}]  {item['command']}"
+
+
+def _describe_delegation(item: dict[str, Any], now: float) -> str:
+    when = item.get("completed_at") or item.get("dispatched_at")
+    age = fmt_age(now - when) if isinstance(when, (int, float)) else "?"
+    line = f"delegation {item['id']}  [{item['state']}, {age} ago]"
+    if item.get("delivery_state") == "dropped":
+        line += "  (result DROPPED after failed deliveries)"
+    elif item.get("delivery_state") == "pending" and item["state"] not in _RUNNING_DELEGATION_STATES:
+        line += "  (result awaiting delivery)"
+    if item.get("goal"):
+        line += f"  {item['goal']}"
+    return line
+
+
+def _describe_loop(item: dict[str, Any], now: float) -> str:
+    bits: list[str] = []
+    status = item.get("status") or "active"
+    if status != "active":
+        bits.append(f"{status}: {item.get('paused_reason') or 'no reason recorded'}")
+    elif item.get("overdue_seconds") is not None:
+        bits.append(f"overdue by {fmt_age(item['overdue_seconds'])}")
+    else:
+        due = item.get("next_due_at")
+        bits.append(f"next in {fmt_age(due - now)}" if isinstance(due, (int, float)) and due else "active")
+    ticks = item.get("ticks_fired")
+    if isinstance(ticks, int) and not isinstance(ticks, bool):
+        bits.append(f"{ticks} tick(s)")
+    if item.get("mode") == "self_paced":
+        delay = item.get("current_delay")
+        bits.append(f"self-paced {fmt_age(delay)}" if isinstance(delay, (int, float)) and delay
+                    else "self-paced")
+    elif isinstance(item.get("interval_seconds"), (int, float)) and item["interval_seconds"]:
+        bits.append(f"every {fmt_age(item['interval_seconds'])}")
+    line = f"loop {item['id']}  [{', '.join(bits)}]"
+    if item.get("prompt"):
+        line += f"  {item['prompt']}"
+    return line
+
+
+def _describe_cron(item: dict[str, Any], now: float) -> str:
+    line = f"cron '{item['name']}'"
+    if item.get("last_fire_error"):
+        # The run never started, so last_status still describes an older run.
+        line += f"  last fire REFUSED: {item['last_fire_error']}"
+    if item.get("last_error"):
+        line += f"  last run FAILED: {item['last_error']}"
+    elif item.get("last_status") not in c.OK_CRON_STATUSES and not item.get("last_fire_error"):
+        line += f"  last status: {item['last_status']}"
+    elif item.get("paused") and not item.get("last_fire_error"):
+        line += f"  paused ({item.get('paused_reason') or 'manually'})"
+    return line
+
+
+def _describe_session(item: dict[str, Any], now: float) -> str:
+    label = item.get("title") or item.get("session_id") or ""
+    return f"session [{item.get('surface')}] pid={item.get('pid')}  {label}".rstrip()
+
+
+def _describe_kanban(item: dict[str, Any], now: float) -> str:
+    who = f" @{item['assignee']}" if item.get("assignee") else ""
+    return f"kanban {item['id']}  [{item['status']}{who}]  {item['title']}"
+
+
+_DESCRIBERS = {
+    "process": _describe_process,
+    "delegation": _describe_delegation,
+    "loop": _describe_loop,
+    "cron": _describe_cron,
+    "session": _describe_session,
+    "kanban": _describe_kanban,
+}
+
+
+def describe(item: dict[str, Any], now: float) -> str:
+    fn = _DESCRIBERS.get(str(item.get("kind")))
+    return fn(item, now) if fn else json.dumps(item, default=str)
+
+
+def _section(lines: list[str], title: str, items: list, mark: str, now: float, empty: str = "") -> None:
+    if not items and not empty:
+        return
+    lines.append(f"  ◆ {title} ({len(items)})")
+    lines += [f"    {mark} {describe(i, now)}" for i in items] or [f"    {empty}"]
+    lines.append("")
+
+
+def render_inbox(data: dict[str, Any]) -> str:
+    now = data.get("generated_at") or time.time()
+    lines: list[str] = [""]
+    _section(lines, "Needs attention", data.get("attention") or [], "⚠", now, "nothing — all clear")
+    _section(lines, "In progress", data.get("in_progress") or [], "◐", now,
+             "nothing running in the background")
+    _section(lines, "Finished, result not yet delivered", data.get("finished_undelivered") or [], "✔", now)
+    if "decisions" in data:
+        items = data.get("decisions") or []
+        lines.append("")
+        lines.append(f"  ? Decisions waiting on you ({len(items)})")
+        if not items:
+            lines.append("      nothing — no task is blocked on input")
+        for d in items:
+            lines.append(f"      • {d.get('title') or d.get('id')}")
+            question = (d.get("question") or "").strip()
+            if question:
+                for chunk in question.splitlines()[:6]:
+                    lines.append(f"          {chunk[:160]}")
+            else:
+                lines.append("          (no question recorded on the task)")
+
+    active = [j for j in data.get("cron") or [] if j.get("enabled") and not j.get("paused")]
+    scheduled = [j for j in active if j.get("next_run_at")]
+    if scheduled:
+        upcoming = sorted(scheduled, key=lambda j: str(j["next_run_at"]))[:5]
+        lines.append(f"  ◆ Scheduled ({len(scheduled)} active job(s))")
+        lines += [f"    ⏱ {j['name']}  next: {j['next_run_at']}" for j in upcoming]
+        lines.append("")
+
+    _section(lines, "Open surfaces", data.get("sessions") or [], "◎", now)
+
+    skipped = [f"{SOURCE_LABELS.get(name, name)}: {note}"
+               for name, note in (data.get("sources") or {}).items() if note != "read"]
+    if skipped:
+        lines.append("  Not read:")
+        lines += [f"    · {s}" for s in skipped]
+        lines.append("")
+    return "\n".join(lines)

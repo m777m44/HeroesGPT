@@ -1,3 +1,13 @@
+## v6.5 — تصميم «الشيطان الظل» 🔥 + دمج ضخم: ps-Agent و NousResearch كاملة (26 مشروعًا)
+
+- **دمج `dark-ps/ps-Agent` كاملًا** (1077 ملفًا مصدريًا): وكيل ظل بذاكرة هوية ومفسِّر وأدوات MCP.
+- **دمج عائلة NousResearch** — قلبها `hermes-agent` (4628 ملفًا: نواة الوكيل، المهارات skills، الإضافات plugins، البوابات gateway، الأدوات tools، الاستمرارية persistence، المحليّات الحرجة) + atropos + hermes-official-plugins + hermes-labs-plugins + Hermes-Bot-Mode + Hermes-Function-Calling + nousflash-agents + hermes-agent-self-evolution + agent-governance-toolkit + OpenShell + TextArena + storywriter + wterm + kaida + pokemon-agent + Open-Reasoning-Tasks + hermes-collective-wisdom + autoreason + local_generative_agents.
+- **بحث واسع في GitHub عن أقوى الوكلاء ودمجهم**: gpt-researcher، OpenAgentsControl، dexter، gitagent، OpenAI Agent Swarm.
+- **مجموع الدمج: أكثر من 13,000 ملف مصدري (~121 ميجابايت معرفة)** داخل «مكتبة الأبطال» — تصفّح 26 مشروعًا واقرأ أي ملف كاملًا وانسخه/نزّله.
+- **تصميم جديد كليًا «الشيطان الظل»**: خلفية هاوية سوداء #07070B، قرمزي شيطاني متوهج، بنفسجي مهيب، هالة رأس متوهجة، أزرار نار متدرجة، عيون جمرة في الأيقونة الجديدة، عنوان «HEROESGPT ⚔ SHADOW ARENA».
+- كل الملفات المدمجة مفحوصة آليًا ضد تسرب المفاتيح — نظيفة 100%.
+- المصادر المجانية بلا مفاتيح (v6.4) تعمل جنبًا إلى جنب: فريق واحد يتعاون — لو تعطّل مصدر يتولى الآخر فورًا حتى النتيجة النهائية.
+
 ## v6.4 — مصادر مجانية جديدة بلا مفاتيح: تعزيز الفريق وتكامل المصادر
 
 - **Heroes Free GPT (GPT-4o) وHeroes Free GPT Pro (GPT-5.6)**: مصدران مجانيان بالكامل بلا أي مفتاح عبر واجهة متوافقة مع OpenAI (chatgpt-proxy) — مُختبَر مباشرة ويُدعّم البث الحي الصاتي ثانية بثانية.

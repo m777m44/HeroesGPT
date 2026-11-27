@@ -14,8 +14,8 @@ android {
         applicationId "com.heroes.gpt"
         minSdk 24
         targetSdk 34
-        versionCode 16
-        versionName "6.4"
+        versionCode 17
+        versionName "6.5"
     }
 
     buildTypes {

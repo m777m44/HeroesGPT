@@ -87,7 +87,7 @@ public class SourceFiles {
     }
 
     public static String repoAssetPath(String project, String relPath) {
-        return "repos/Ai_Agents_Heroes/" + project + "/" + relPath;
+        return "repos/" + project + "/" + relPath;
     }
 
     public static List<Object[]> bundledSources(Context c) {
