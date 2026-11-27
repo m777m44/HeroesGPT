@@ -1,0 +1,46 @@
+# Wandb-enabled smoke config for `mcqa` — runs in wandb offline mode so no
+# login is required. The trainer's `_maybe_init_wandb` honors standard wandb
+# env vars (WANDB_MODE=offline is set by scripts/smoke_mcqa_wandb.sh).
+#
+# Verify afterwards that:
+#   ./wandb/offline-run-*/run-*.wandb  exists
+#   ./wandb/offline-run-*/logs/debug.log mentions our project + metrics
+
+schema_version: 1
+
+tinker:
+  base_model: meta-llama/Llama-3.1-8B-Instruct
+  lora_rank: 32
+  learning_rate: 5.0e-4
+  adam_beta1: 0.9
+  adam_beta2: 0.95
+  adam_eps: 1.0e-12
+  loss_fn: importance_sampling
+  wandb_project: tinker-nemogym-live-test
+  wandb_name: smoke-mcqa
+  checkpoint_dir: ./checkpoints/smoke_mcqa_wandb
+  resume_from_checkpoint: null
+
+model_server:
+  host: 127.0.0.1
+  port: 8001
+  stop_tokens: []
+
+nemogym:
+  agent_url: null
+  head_url: http://127.0.0.1:11000
+  dataset_jsonl: tinker_nemogym/environments/mcqa/dataset.jsonl
+  group_size: 8
+  ng_run_yamls: []
+
+training:
+  n_steps: 2
+  batch_size: 2
+  max_tokens: 256
+  temperature: 1.0
+  save_every: 0  # skip periodic saves in the wandb smoke — not the focus
+  eval_every: 100
+  drop_constant_reward: true
+  # Precision-gap (β) diagnostic. See configs/smoke_diagnostics.yaml
+  # + docs/diagnostics.md. Off by default; flip on when auditing a model.
+  measure_precision_gap: false

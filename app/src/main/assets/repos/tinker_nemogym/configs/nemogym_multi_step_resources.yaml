@@ -1,0 +1,11 @@
+# nemo-gym resources server config for example_multi_step. Mirrors upstream:
+#   nemo-gym/resources_servers/example_multi_step/configs/example_multi_step.yaml
+# but keeps only the resources_servers block — the agent + policy_model live
+# in nemogym_multi_step_agent.yaml.
+example_multi_step_resources_server:
+  resources_servers:
+    example_multi_step:
+      entrypoint: app.py
+      domain: instruction_following
+      verified: false
+      description: Multi-step tool calling (synonym extraction)

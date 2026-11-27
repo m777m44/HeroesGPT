@@ -1,0 +1,49 @@
+# Top-level tinker-nemogym live-run config for the `tng_json_format`
+# environment against NVIDIA-Nemotron-3-Nano-30B-A3B-BF16 (Tinker's smaller
+# Nemotron MoE; max_ctx=65536).
+#
+# Run via:
+#     bash scripts/smoke_json_format.sh
+
+schema_version: 1
+
+tinker:
+  base_model: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
+  lora_rank: 32
+  learning_rate: 5.0e-4
+  adam_beta1: 0.9
+  adam_beta2: 0.95
+  adam_eps: 1.0e-12
+  loss_fn: importance_sampling
+  wandb_project: tinker-nemogym-json-format
+  wandb_name: nemotron-nano-json-format-run1
+  checkpoint_dir: ./checkpoints/smoke_json_format_nemotron
+  resume_from_checkpoint: null
+
+model_server:
+  host: 127.0.0.1
+  port: 8001
+  stop_tokens: []
+
+nemogym:
+  # Leave agent_url null so the trainer discovers the agent port dynamically
+  # via the HeadServer's /server_instances endpoint.
+  agent_url: null
+  head_url: http://127.0.0.1:11000
+  dataset_jsonl: tinker_nemogym/environments/json_format/dataset.jsonl
+  # Three-level reward (0.0 / 0.5 / 1.0) gives within-group variance at
+  # group_size=8 even when the base model is a strong instruct policy.
+  group_size: 8
+  ng_run_yamls: []
+
+training:
+  n_steps: 5
+  batch_size: 2
+  max_tokens: 512
+  temperature: 1.0
+  save_every: 2
+  eval_every: 100
+  drop_constant_reward: true
+  # Precision-gap (β) diagnostic. See configs/smoke_diagnostics.yaml
+  # + docs/diagnostics.md. Off by default; flip on when auditing a model.
+  measure_precision_gap: false

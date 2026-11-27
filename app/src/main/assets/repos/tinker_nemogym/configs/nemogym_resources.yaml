@@ -1,0 +1,11 @@
+# nemo-gym resources server config — mirrors upstream
+#   nemo-gym/resources_servers/example_single_tool_call/configs/example_single_tool_call.yaml
+# but only the resources_servers block (we split agent + policy_model into
+# separate files so the tinker-nemogym launcher can swap the policy model).
+example_single_tool_call:
+  resources_servers:
+    example_single_tool_call:
+      entrypoint: app.py
+      domain: agent
+      verified: false
+      description: Basic single-step tool calling

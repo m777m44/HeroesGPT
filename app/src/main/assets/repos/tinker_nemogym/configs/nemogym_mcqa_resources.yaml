@@ -1,0 +1,12 @@
+# nemo-gym resources server config for the `mcqa` benchmark. Mirrors upstream:
+#   nemo-gym/resources_servers/mcqa/configs/mcqa.yaml
+# but keeps only the resources_servers block — the agent + policy_model live
+# in nemogym_mcqa_agent.yaml.
+mcqa:
+  resources_servers:
+    mcqa:
+      entrypoint: app.py
+      grading_mode: null
+      domain: knowledge
+      verified: false
+      description: Multi-choice question answering problems

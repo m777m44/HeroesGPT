@@ -1,0 +1,52 @@
+name: sprites
+version: 1.0.0
+description: Sprites terminal backend — stateful cloud sandboxes on Fly.io with checkpoint & restore
+author: Kyle McLaren (@kylemclaren) / Nous Research
+kind: backend
+requires_env:
+  - SPRITES_TOKEN
+python_dependencies:
+  - sprites-py>=0.5.1,<0.6
+# Optional settings, read from plugins.entries.sprites.settings in config.yaml.
+config_schema:
+  name_prefix:
+    type: str
+    label: Sprite name prefix
+    description: >-
+      Every Sprite name starts with "<prefix>-" instead of "hermes-" (lowercase
+      letters, digits and single hyphens, at most 40 characters). Unset keeps
+      the original hermes-* names. An invalid value refuses to start the backend.
+  scope:
+    type: str
+    label: Sprite scope
+    description: >-
+      "session" (default) gives each session its own persistent Sprite;
+      "instance" shares one persistent Sprite per profile across every
+      session, cron job and subagent.
+    choices: [session, instance]
+    default: session
+  image:
+    type: str
+    label: Sprite image
+    description: >-
+      OCI image for Sprites this plugin creates, with an explicit tag (not
+      "latest") or a digest; a digest pin (name@sha256:...) is recommended.
+      Unset uses the Sprites base image. Applies only when a Sprite is
+      created; an existing Sprite keeps its image.
+  max_cpus:
+    type: int
+    label: Sprite vCPUs
+    description: >-
+      vCPUs for newly created Sprites, 1 to 128. Unset uses the Sprites default.
+  max_ram_gb:
+    type: int
+    label: Sprite memory (GB)
+    description: >-
+      Memory in GB for newly created Sprites, 1 to 1024. Unset uses the
+      Sprites default.
+  max_disk_gb:
+    type: int
+    label: Sprite disk (GB)
+    description: >-
+      Root filesystem in GB for newly created Sprites, 1 to 1024 and no smaller
+      than the image. Unset uses the Sprites default.

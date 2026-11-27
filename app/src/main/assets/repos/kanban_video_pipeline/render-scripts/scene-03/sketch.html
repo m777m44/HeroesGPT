@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scene 03 — Fan-out: A Mind Divides Itself</title>
+  <script>p5.disableFriendlyErrors = true;</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.3/p5.min.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<script>
+// === Scene 03: Fan-out — A Mind Divides Itself ===
+// Duration: 19 seconds (0:30 - 0:49) at 24fps = 456 frames
+// Beat drop at 0:30.90 = frame ~22 (0.9s * 24fps)
+// Key visual: ORGANIC EXPLOSION — mitosis, not mechanics
+
+const W = 1920;
+const H = 1080;
+const FPS = 24;
+const TOTAL_FRAMES = 19 * FPS; // 456 frames
+const BEAT_DROP_FRAME = Math.round(0.9 * FPS); // frame 22
+
+// Brand colors
+const GOLD = [245, 184, 32];
+const DARK_AMBER = [196, 122, 26];
+const ROYAL_BLUE = [0, 0, 255];
+const BLUE_MID = [34, 34, 255];
+const NAVY = [0, 0, 128];
+const WHITE = [255, 255, 255];
+
+// Beat times from audio analysis (relative to clip start at 0:30)
+const BEATS = [0.46, 0.96, 1.29, 1.75, 2.33, 2.67, 3.37, 4.04, 4.37, 5.46,
+               6.16, 6.83, 8.21, 8.96, 9.62, 10.0, 11.0, 11.71, 12.25, 12.75,
+               13.45, 13.79, 14.5, 15.16, 15.54, 16.54, 17.29, 17.62, 17.95];
+
+// Worker profiles - arranged in a deliberate star pattern (72° apart)
+const PROFILES = [
+  { name: "@researcher", angle: -Math.PI/2 - 0.6 },   // upper-left
+  { name: "@engineer",   angle: -Math.PI/2 + 0.6 },   // upper-right
+  { name: "@reviewer",   angle: 0.3 },                  // right
+  { name: "@deployer",   angle: Math.PI/2 + 0.4 },    // lower-right
+  { name: "@tester",     angle: Math.PI - 0.3 }        // left
+];
+
+// Global state
+let centralNode;
+let workerStreams = [];
+let microParticles = [];
+let trailLayer, glowLayer;
+let bgParticles = [];
+let shockwaveRing = null;
+
+// Utility
+function lerpColor3(c1, c2, t) {
+  t = Math.max(0, Math.min(1, t));
+  return [c1[0]+(c2[0]-c1[0])*t, c1[1]+(c2[1]-c1[1])*t, c1[2]+(c2[2]-c1[2])*t];
+}
+
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+function easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
+function easeOutExpo(t) { return t === 1 ? 1 : 1 - Math.pow(2, -10 * t); }
+function easeInQuad(t) { return t * t; }
+function smoothstep(t) { return t * t * (3 - 2 * t); }
+
+// Audio simulation based on real Doomscroll analysis
+// Section 0:30-0:49: "Main groove — full beat kicks in"
+function getAudioFeatures(frame) {
+  let t = frame / FPS;
+  let features = { bass: 0, kick: false, hihat: false, melody: 0, energy: 0 };
+  
+  // Bass envelope - moderate and consistent in this groove section
+  features.bass = 0.45 + 0.2 * Math.sin(t * 1.8) + 0.15 * Math.sin(t * 3.7);
+  
+  // Check beats (kick hits)
+  for (let bt of BEATS) {
+    let diff = Math.abs(t - bt);
+    if (diff < 0.04) {
+      features.kick = true;
+      features.bass = Math.min(1.0, features.bass + 0.45);
+      break;
+    }
+  }
+  
+  // Hi-hat pattern (16th note feel)
+  features.hihat = Math.sin(t * 14.0) > 0.82 || Math.sin(t * 9.5 + 1.2) > 0.88;
+  
+  // Melody builds through section - arpeggiated synth entering
+  let melodyCurve = Math.min(1.0, t / 14);
+  features.melody = melodyCurve * (0.4 + 0.6 * Math.abs(Math.sin(t * 2.1)));
+  
+  // Overall energy ramps up
+  features.energy = 0.35 + features.bass * 0.35 + features.melody * 0.3;
+  
+  return features;
+}
+
+// Background particle (drifting void texture - navy dots)
+class BgParticle {
+  constructor() {
+    this.reset();
+    this.y = Math.random() * H;
+  }
+  reset() {
+    this.x = Math.random() * W;
+    this.y = H + Math.random() * 50;
+    this.speed = 0.15 + Math.random() * 0.4;
+    this.size = 1 + Math.random() * 1.5;
+    this.alpha = 12 + Math.random() * 20;
+    this.phase = Math.random() * Math.PI * 2;
+  }
+  update() {
+    this.y -= this.speed;
+    this.x += Math.sin(frameCount * 0.008 + this.phase) * 0.3;
+    if (this.y < -10) this.reset();
+  }
+  draw(pg) {
+    pg.noStroke();
+    pg.fill(NAVY[0], NAVY[1], 192, this.alpha);
+    pg.ellipse(this.x, this.y, this.size, this.size);
+  }
+}
+
+// ==========================================
+// CENTRAL NODE — The mind before division
+// ==========================================
+class CentralNode {
+  constructor() {
+    this.x = W / 2;
+    this.y = H / 2;
+    this.baseRadius = 55;
+    this.radius = this.baseRadius;
+    this.alive = true;
+    this.exploded = false;
+    this.brightness = 1.0;
+    this.particles = [];
+    this.explosionParticles = [];
+    this.organicTendrils = [];
+    this.pulsePhase = 0;
+    
+    // Dense gold cluster — like a living cell nucleus
+    for (let i = 0; i < 180; i++) {
+      let angle = Math.random() * Math.PI * 2;
+      let r = Math.pow(Math.random(), 0.6) * this.baseRadius;
+      this.particles.push({
+        ox: Math.cos(angle) * r,
+        oy: Math.sin(angle) * r,
+        size: 1.5 + Math.random() * 5,
+        phase: Math.random() * Math.PI * 2,
+        brightness: 0.7 + Math.random() * 0.3,
+        speed: 0.3 + Math.random() * 0.7
+      });
+    }
+    
+    // Organic tendrils (pre-explosion foreshadowing — like cell membrane extensions)
+    for (let i = 0; i < 8; i++) {
+      this.organicTendrils.push({
+        angle: (i / 8) * Math.PI * 2,
+        length: 15 + Math.random() * 25,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.4 + Math.random() * 0.6,
+        width: 2 + Math.random() * 3
+      });
+    }
+  }
+  
+  update(frame) {
+    let t = frame / FPS;
+    this.pulsePhase = t * 2.5;
+    
+    if (!this.exploded) {
+      // SWELL before explosion — 8 frames of breathing IN (the inhale before the split)
+      if (frame >= BEAT_DROP_FRAME - 8 && frame < BEAT_DROP_FRAME) {
+        let swellT = (frame - (BEAT_DROP_FRAME - 8)) / 8;
+        let swellCurve = easeInQuad(swellT);
+        this.radius = this.baseRadius * (1.0 + swellCurve * 0.8); // grow to 1.8x
+        this.brightness = 1.1 + swellCurve * 0.7; // brightening
+      } else if (frame < BEAT_DROP_FRAME - 8) {
+        // Normal breathing — alive, visible, PRESENT
+        let breathe = Math.sin(t * 2.5) * 0.08;
+        this.radius = this.baseRadius * (1 + breathe);
+        this.brightness = 1.0 + Math.sin(t * 1.5) * 0.15;
+      }
+      
+      // Trigger explosion at beat drop
+      if (frame >= BEAT_DROP_FRAME) {
+        this.exploded = true;
+        this._createExplosion();
+      }
+    }
+    
+    // Update explosion particles
+    for (let p of this.explosionParticles) {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vx *= 0.96;
+      p.vy *= 0.96;
+      p.life -= p.decay;
+    }
+    this.explosionParticles = this.explosionParticles.filter(p => p.life > 0);
+  }
+  
+  _createExplosion() {
+    // Organic burst — like membrane rupturing violently
+    // Multiple rings at different speeds for layered organic feel
+    for (let ring = 0; ring < 4; ring++) {
+      let count = 40 + ring * 15;
+      let baseSpeed = 20 + ring * 8; // VERY fast — need to fill screen in ~3 frames
+      for (let i = 0; i < count; i++) {
+        let angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+        let speed = baseSpeed * (0.6 + Math.random() * 0.8);
+        let size = ring === 0 ? (5 + Math.random() * 7) : (2.5 + Math.random() * 4.5);
+        this.explosionParticles.push({
+          x: this.x + Math.cos(angle) * (3 + ring * 5),
+          y: this.y + Math.sin(angle) * (3 + ring * 5),
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          size: size,
+          life: 1.0,
+          decay: 0.004 + Math.random() * 0.007 + ring * 0.002,
+          ring: ring
+        });
+      }
+    }
+    
+    // Massive shockwave ring — fills frame fast
+    shockwaveRing = { radius: 50, maxRadius: 800, speed: 45, alpha: 1.0 };
+  }
+  
+  draw(pg) {
+    // Draw explosion particles (gold → blue transition as they travel)
+    for (let p of this.explosionParticles) {
+      let dist = Math.sqrt((p.x - W/2)**2 + (p.y - H/2)**2) / 400;
+      let c = lerpColor3(GOLD, ROYAL_BLUE, Math.min(dist, 1));
+      pg.noStroke();
+      // Glow
+      pg.fill(c[0], c[1], c[2], p.life * 40);
+      pg.ellipse(p.x, p.y, p.size * 4, p.size * 4);
+      // Core
+      pg.fill(c[0], c[1], c[2], p.life * 200);
+      pg.ellipse(p.x, p.y, p.size * p.life * 1.5, p.size * p.life * 1.5);
+      // Hot center
+      pg.fill(255, 240, 200, p.life * 100);
+      pg.ellipse(p.x, p.y, p.size * 0.5, p.size * 0.5);
+    }
+    
+    if (!this.alive) return;
+    if (this.exploded) { this.alive = false; return; }
+    
+    pg.push();
+    pg.translate(this.x, this.y);
+    
+    // === MULTI-LAYER GLOW — making the node POWERFULLY LUMINOUS ===
+    
+    pg.noStroke();
+    let b = Math.min(this.brightness, 2.5); // cap to prevent alpha overflow
+    // Cap glow spread during swell to prevent background washout
+    let glowScale = Math.min(this.radius / this.baseRadius, 1.5); // TIGHT limit on glow spread
+    let drawRadius = this.baseRadius * glowScale; // use this for outer halos
+    let coreRadius = this.radius; // core itself can be big
+    
+    // Widest ambient halo (stays controlled)
+    pg.fill(GOLD[0], GOLD[1], GOLD[2], Math.min(12 * b, 35));
+    pg.ellipse(0, 0, drawRadius * 7, drawRadius * 7);
+    
+    // Second halo
+    pg.fill(GOLD[0], GOLD[1], GOLD[2], Math.min(20 * b, 55));
+    pg.ellipse(0, 0, drawRadius * 5, drawRadius * 5);
+    
+    // Third halo
+    pg.fill(GOLD[0], GOLD[1], GOLD[2], Math.min(35 * b, 90));
+    pg.ellipse(0, 0, drawRadius * 3.5, drawRadius * 3.5);
+    
+    // Inner glow ring (uses full radius for impact)
+    pg.fill(GOLD[0], GOLD[1], GOLD[2], Math.min(45 * b, 120));
+    pg.ellipse(0, 0, coreRadius * 2.2, coreRadius * 2.2);
+    
+    // Bright glow
+    pg.fill(GOLD[0], GOLD[1] * 1.05, GOLD[2] * 0.4, Math.min(70 * b, 170));
+    pg.ellipse(0, 0, coreRadius * 1.5, coreRadius * 1.5);
+    
+    // Solid core
+    pg.fill(GOLD[0], GOLD[1], GOLD[2], Math.min(140 * b, 240));
+    pg.ellipse(0, 0, coreRadius * 1.0, coreRadius * 1.0);
+    
+    // Hot center (near-white gold)
+    pg.fill(255, 230, 150, Math.min(120 * b, 230));
+    pg.ellipse(0, 0, coreRadius * 0.55, coreRadius * 0.55);
+    
+    // White-hot core
+    pg.fill(255, 255, 230, Math.min(80 * b, 180));
+    pg.ellipse(0, 0, coreRadius * 0.25, coreRadius * 0.25);
+    
+    // === ORGANIC TENDRILS — membrane extensions, foreshadowing the split ===
+    for (let tend of this.organicTendrils) {
+      let wave = Math.sin(this.pulsePhase * tend.speed + tend.phase);
+      let len = tend.length * (1 + wave * 0.4) * (this.radius / this.baseRadius);
+      let a = tend.angle + Math.sin(this.pulsePhase * 0.7 + tend.phase) * 0.15;
+      
+      let startX = Math.cos(a) * this.radius * 0.6;
+      let startY = Math.sin(a) * this.radius * 0.6;
+      let endX = Math.cos(a) * (this.radius * 0.6 + len);
+      let endY = Math.sin(a) * (this.radius * 0.6 + len);
+      
+      // Tendril glow
+      pg.stroke(GOLD[0], GOLD[1], GOLD[2], 30 * this.brightness);
+      pg.strokeWeight(tend.width * 2.5);
+      pg.line(startX, startY, endX, endY);
+      
+      // Tendril core
+      pg.stroke(GOLD[0], GOLD[1], GOLD[2], 80 * this.brightness);
+      pg.strokeWeight(tend.width * 0.8);
+      pg.line(startX, startY, endX, endY);
+      
+      // Tip dot
+      pg.noStroke();
+      pg.fill(GOLD[0], GOLD[1], GOLD[2], 100 * this.brightness * (0.5 + wave * 0.5));
+      pg.ellipse(endX, endY, 4, 4);
+    }
+    
+    // === PARTICLE CLUSTER — the nucleus ===
+    let scale = coreRadius / this.baseRadius;
+    for (let p of this.particles) {
+      let wobble = Math.sin(frameCount * 0.04 * p.speed + p.phase);
+      let px = p.ox * scale + wobble * 3;
+      let py = p.oy * scale + Math.cos(frameCount * 0.04 * p.speed + p.phase * 1.3) * 3;
+      let pb = Math.min(b * p.brightness, 1.0); // ensure no channel overflow
+      pg.noStroke();
+      pg.fill(Math.min(GOLD[0] * pb, 255), Math.min(GOLD[1] * pb, 255), Math.min(GOLD[2] * pb, 255),
+              150 + Math.sin(frameCount * 0.08 + p.phase) * 50);
+      pg.ellipse(px, py, p.size * Math.min(scale, 2.5), p.size * Math.min(scale, 2.5));
+    }
+    
+    pg.pop();
+  }
+  
+  drawResidual(pg, frame) {
+    if (!this.exploded) return;
+    let age = (frame - BEAT_DROP_FRAME) / FPS;
+    let residual = Math.max(0.12, 1 - age / 15);
+    
+    // Residual glow at center - the ghost of the original mind
+    let breathe = 1 + Math.sin(frame * 0.05) * 0.12;
+    let r = 35 * residual * breathe;
+    
+    pg.noStroke();
+    // Wide glow
+    pg.fill(GOLD[0], GOLD[1], GOLD[2], residual * 12);
+    pg.ellipse(W/2, H/2, r * 8, r * 8);
+    // Outer glow
+    pg.fill(GOLD[0], GOLD[1], GOLD[2], residual * 25);
+    pg.ellipse(W/2, H/2, r * 5, r * 5);
+    // Mid glow
+    pg.fill(GOLD[0], GOLD[1], GOLD[2], residual * 55);
+    pg.ellipse(W/2, H/2, r * 3, r * 3);
+    // Core
+    pg.fill(GOLD[0], GOLD[1], GOLD[2], residual * 150);
+    pg.ellipse(W/2, H/2, r * 1.2, r * 1.2);
+    // Hot center
+    pg.fill(255, 240, 200, residual * 90);
+    pg.ellipse(W/2, H/2, r * 0.4, r * 0.4);
+  }
+}
+
+// ==========================================
+// SHOCKWAVE RING — radial pulse from explosion
+// ==========================================
+function drawShockwave(pg, frame) {
+  if (!shockwaveRing) return;
+  
+  shockwaveRing.radius += shockwaveRing.speed;
+  shockwaveRing.speed *= 0.97;
+  shockwaveRing.alpha *= 0.94;
+  
+  if (shockwaveRing.alpha < 0.01) { shockwaveRing = null; return; }
+  
+  let r = shockwaveRing.radius;
+  let a = shockwaveRing.alpha;
+  
+  // Outer ring glow
+  pg.noFill();
+  pg.stroke(GOLD[0], GOLD[1], GOLD[2], a * 30);
+  pg.strokeWeight(12);
+  pg.ellipse(W/2, H/2, r * 2, r * 2);
+  
+  // Mid ring
+  pg.stroke(GOLD[0], GOLD[1], GOLD[2], a * 80);
+  pg.strokeWeight(4);
+  pg.ellipse(W/2, H/2, r * 2, r * 2);
+  
+  // Inner bright ring
+  pg.stroke(255, 240, 200, a * 50);
+  pg.strokeWeight(1.5);
+  pg.ellipse(W/2, H/2, r * 2, r * 2);
+}
+
+// ==========================================
+// WORKER STREAM — each particle stream is a "thought becoming an agent"
+// ==========================================
+class WorkerStream {
+  constructor(profile, index) {
+    this.profile = profile;
+    this.index = index;
+    this.angle = profile.angle;
+    this.targetDist = 400;
+    this.targetX = W/2 + Math.cos(this.angle) * this.targetDist;
+    this.targetY = H/2 + Math.sin(this.angle) * this.targetDist;
+    this.particles = [];
+    this.launched = false;
+    this.launchFrame = BEAT_DROP_FRAME;
+    this.arrived = false;
+    this.arrivalFrame = 0;
+    this.labelAlpha = 0;
+    this.stationAlpha = 0;
+    this.orbitParticles = [];
+    
+    // Stagger travel time by stream (organic — not all same speed)
+    this.travelDuration = FPS * (1.8 + index * 0.3);
+  }
+  
+  launch() {
+    this.launched = true;
+    let count = 12;
+    for (let i = 0; i < count; i++) {
+      this.particles.push({
+        x: W/2, y: H/2,
+        delay: i * 2.0 + Math.random() * 0.5, // organic spacing
+        speed: 0.8 + Math.random() * 0.4,
+        angleOffset: (Math.random() - 0.5) * 0.18, // wider spread
+        progress: 0,
+        size: 3 + Math.random() * 5,
+        trail: [],
+        arrived: false,
+        phase: Math.random() * Math.PI * 2,
+        glowSize: 8 + Math.random() * 10,
+        wobbleAmp: 8 + Math.random() * 12, // organic wobble in flight
+        wobbleFreq: 2 + Math.random() * 3
+      });
+    }
+  }
+  
+  update(frame) {
+    if (!this.launched) return;
+    let elapsed = frame - this.launchFrame;
+    
+    for (let p of this.particles) {
+      if (elapsed < p.delay) continue;
+      
+      let localElapsed = elapsed - p.delay;
+      let t = Math.min(localElapsed / this.travelDuration, 1.0);
+      let eased = easeOutCubic(t);
+      
+      // Spring overshoot at end (organic landing)
+      let finalT = eased;
+      if (t > 0.85) {
+        let overT = (t - 0.85) / 0.15;
+        finalT = eased + Math.sin(overT * Math.PI * 2) * 0.02 * (1 - overT);
+      }
+      
+      // Organic wobble during flight (like swimming through medium)
+      let wobble = 0;
+      if (t < 0.9) {
+        wobble = Math.sin(t * p.wobbleFreq * Math.PI + p.phase) * p.wobbleAmp * (1 - t);
+      }
+      
+      let effectiveAngle = this.angle + p.angleOffset * (1 - eased * 0.7);
+      let perpAngle = effectiveAngle + Math.PI / 2;
+      
+      let baseX = W/2 + Math.cos(effectiveAngle) * this.targetDist * finalT;
+      let baseY = H/2 + Math.sin(effectiveAngle) * this.targetDist * finalT;
+      
+      p.x = baseX + Math.cos(perpAngle) * wobble;
+      p.y = baseY + Math.sin(perpAngle) * wobble;
+      p.progress = t;
+      
+      // Trail recording (longer persistence for comet tail)
+      p.trail.push({ x: p.x, y: p.y, age: 0 });
+      if (p.trail.length > 60) p.trail.shift();
+      for (let tr of p.trail) tr.age++;
+      
+      if (t >= 1.0 && !p.arrived) {
+        p.arrived = true;
+      }
+    }
+    
+    // Check first particle arrival
+    if (!this.arrived && this.particles.length > 0 && this.particles[0].arrived) {
+      this.arrived = true;
+      this.arrivalFrame = frame;
+      // Spawn orbit particles (station comes alive)
+      for (let i = 0; i < 10; i++) {
+        this.orbitParticles.push({
+          angle: (i / 10) * Math.PI * 2,
+          dist: 22 + Math.random() * 18,
+          speed: 0.015 + Math.random() * 0.02,
+          size: 1.5 + Math.random() * 2.5,
+          phase: Math.random() * Math.PI * 2
+        });
+      }
+    }
+    
+    // Label/station fade-in
+    if (this.arrived) {
+      let since = frame - this.arrivalFrame;
+      this.labelAlpha = Math.min(since / 24, 1.0);
+      this.stationAlpha = Math.min(since / 15, 1.0);
+    }
+  }
+  
+  drawTrails(pg) {
+    if (!this.launched) return;
+    
+    for (let p of this.particles) {
+      if (p.trail.length < 2) continue;
+      for (let i = 1; i < p.trail.length; i++) {
+        let tr = p.trail[i];
+        let prev = p.trail[i-1];
+        // Fade based on age — comet tail effect
+        let alpha = Math.max(0, 180 - tr.age * 3);
+        if (alpha <= 0) continue;
+        
+        // Color based on distance from center (gold → blue gradient)
+        let dist = Math.sqrt((tr.x - W/2)**2 + (tr.y - H/2)**2) / this.targetDist;
+        let c = lerpColor3(GOLD, ROYAL_BLUE, dist * 0.9);
+        
+        // Thicker near the head, thinner at the tail
+        let thickness = 1.0 + (1 - tr.age / 60) * 2.5 * (1 - dist * 0.5);
+        
+        pg.stroke(c[0], c[1], c[2], alpha);
+        pg.strokeWeight(thickness);
+        pg.line(prev.x, prev.y, tr.x, tr.y);
+      }
+    }
+  }
+  
+  drawParticles(pg) {
+    if (!this.launched) return;
+    let elapsed = frameCount - this.launchFrame;
+    
+    for (let p of this.particles) {
+      if (elapsed < p.delay) continue;
+      
+      let dist = Math.sqrt((p.x - W/2)**2 + (p.y - H/2)**2) / this.targetDist;
+      let c = lerpColor3(GOLD, BLUE_MID, dist * 0.85);
+      
+      // After arrival: gentle oscillation (breathing in place)
+      if (p.arrived) {
+        let osc = Math.sin(frameCount * 0.05 + p.phase) * 5;
+        let oscY = Math.cos(frameCount * 0.04 + p.phase * 1.4) * 5;
+        p.x = this.targetX + osc;
+        p.y = this.targetY + oscY;
+      }
+      
+      // Outer glow (additive feel)
+      pg.noStroke();
+      pg.fill(c[0], c[1], c[2], 20);
+      pg.ellipse(p.x, p.y, p.glowSize * 2.5, p.glowSize * 2.5);
+      // Mid glow
+      pg.fill(c[0], c[1], c[2], 45);
+      pg.ellipse(p.x, p.y, p.glowSize * 1.3, p.glowSize * 1.3);
+      // Core particle
+      pg.fill(c[0], c[1], c[2], 230);
+      pg.ellipse(p.x, p.y, p.size, p.size);
+      // Hot center
+      pg.fill(255, 255, 255, 90);
+      pg.ellipse(p.x, p.y, p.size * 0.35, p.size * 0.35);
+    }
+  }
+  
+  drawOrbitParticles(pg, frame) {
+    if (!this.arrived) return;
+    let since = frame - this.arrivalFrame;
+    let fadeIn = Math.min(since / 30, 1.0);
+    
+    for (let op of this.orbitParticles) {
+      let a = op.angle + frame * op.speed;
+      let d = op.dist * (1 + Math.sin(frame * 0.025 + op.phase) * 0.12);
+      let ox = this.targetX + Math.cos(a) * d;
+      let oy = this.targetY + Math.sin(a) * d;
+      
+      pg.noStroke();
+      pg.fill(BLUE_MID[0], BLUE_MID[1], BLUE_MID[2], fadeIn * 100);
+      pg.ellipse(ox, oy, op.size * 1.5, op.size * 1.5);
+      pg.fill(BLUE_MID[0], BLUE_MID[1], BLUE_MID[2], fadeIn * 180);
+      pg.ellipse(ox, oy, op.size, op.size);
+    }
+  }
+  
+  drawStation(pg, audio) {
+    if (this.stationAlpha <= 0) return;
+    
+    let alpha = this.stationAlpha * 255;
+    let x = this.targetX;
+    let y = this.targetY;
+    let stW = 120, stH = 55;
+    
+    // Station outer glow (breathing with bass)
+    let glowIntensity = this.stationAlpha * (0.35 + audio.bass * 0.35 + audio.melody * 0.3);
+    pg.noStroke();
+    pg.fill(BLUE_MID[0], BLUE_MID[1], BLUE_MID[2], glowIntensity * 25);
+    pg.ellipse(x, y, stW * 2, stH * 2);
+    pg.fill(BLUE_MID[0], BLUE_MID[1], BLUE_MID[2], glowIntensity * 40);
+    pg.ellipse(x, y, stW * 1.4, stH * 1.4);
+    
+    // Reception flash on arrival
+    if (this.arrived) {
+      let since = frameCount - this.arrivalFrame;
+      if (since < 18) {
+        let flash = (1 - since / 18);
+        flash = flash * flash; // quadratic decay
+        pg.fill(GOLD[0], GOLD[1], GOLD[2], flash * 200);
+        pg.ellipse(x, y, stW * 1.3 * (1 + flash * 0.3), stH * 1.3 * (1 + flash * 0.3));
+      }
+    }
+    
+    // Border — double line for depth
+    pg.noFill();
+    pg.stroke(BLUE_MID[0], BLUE_MID[1], BLUE_MID[2], alpha * 0.2);
+    pg.strokeWeight(4);
+    pg.rect(x - stW/2, y - stH/2, stW, stH, 5);
+    pg.stroke(BLUE_MID[0], BLUE_MID[1], BLUE_MID[2], alpha * 0.8);
+    pg.strokeWeight(1.5);
+    pg.rect(x - stW/2, y - stH/2, stW, stH, 5);
+    
+    // Cursor blink inside station
+    if (this.arrived) {
+      let since = frameCount - this.arrivalFrame;
+      if (since > 18 && Math.floor(since / 14) % 2 === 0) {
+        pg.fill(255, 255, 255, alpha * 0.85);
+        pg.noStroke();
+        pg.rect(x - stW/2 + 14, y - 7, 8, 14);
+      }
+    }
+  }
+  
+  drawLabel(pg) {
+    if (this.labelAlpha <= 0) return;
+    
+    // Position label between center and target (closer to midway)
+    let labelDist = this.targetDist * 0.55;
+    let lx = W/2 + Math.cos(this.angle) * labelDist;
+    let ly = H/2 + Math.sin(this.angle) * labelDist;
+    
+    // Text shadow
+    pg.fill(0, 0, 0, this.labelAlpha * 220);
+    pg.noStroke();
+    pg.textAlign(CENTER, CENTER);
+    pg.textSize(14);
+    pg.textFont('monospace');
+    pg.text(this.profile.name, lx + 1, ly + 1);
+    
+    // Main label text in white
+    pg.fill(255, 255, 255, this.labelAlpha * 240);
+    pg.text(this.profile.name, lx, ly);
+  }
+  
+  drawConnection(pg, audio) {
+    if (!this.launched) return;
+    let elapsed = (frameCount - this.launchFrame) / FPS;
+    let baseAlpha = Math.min(elapsed / 2.0, 1.0);
+    if (baseAlpha <= 0) return;
+    
+    // Pulsing gold connection — nerve fiber
+    let pulsePhase = frameCount * 0.07 + this.index * 0.6;
+    let pulse = 0.65 + Math.sin(pulsePhase) * 0.35;
+    let alpha = baseAlpha * pulse * (80 + audio.bass * 120);
+    
+    // Curved connection line (quadratic bezier for organic feel)
+    let mx = (W/2 + this.targetX) / 2 + Math.sin(this.angle + 1.57) * 30;
+    let my = (H/2 + this.targetY) / 2 + Math.cos(this.angle + 1.57) * 30;
+    
+    // Outer glow
+    pg.noFill();
+    pg.stroke(GOLD[0], GOLD[1], GOLD[2], alpha * 0.25);
+    pg.strokeWeight(4 + audio.bass * 2);
+    pg.beginShape();
+    pg.vertex(W/2, H/2);
+    pg.quadraticVertex(mx, my, this.targetX, this.targetY);
+    pg.endShape();
+    
+    // Core line
+    pg.stroke(GOLD[0], GOLD[1], GOLD[2], alpha * 0.8);
+    pg.strokeWeight(1.2 + audio.bass * 0.6);
+    pg.beginShape();
+    pg.vertex(W/2, H/2);
+    pg.quadraticVertex(mx, my, this.targetX, this.targetY);
+    pg.endShape();
+    
+    // Traveling pulses (data in transit)
+    if (elapsed > 0.6) {
+      for (let pi = 0; pi < 4; pi++) {
+        let pulsePos = ((frameCount * 0.01 + this.index * 0.25 + pi * 0.25) % 1.0);
+        let px = W/2 + (this.targetX - W/2) * pulsePos;
+        let py = H/2 + (this.targetY - H/2) * pulsePos;
+        let pAlpha = alpha * (0.4 + 0.6 * Math.sin(pulsePos * Math.PI));
+        pg.noStroke();
+        pg.fill(GOLD[0], GOLD[1], GOLD[2], pAlpha * 0.8);
+        pg.ellipse(px, py, 6 + audio.bass * 3, 6 + audio.bass * 3);
+        pg.fill(GOLD[0], GOLD[1], GOLD[2], pAlpha * 0.25);
+        pg.ellipse(px, py, 14, 14);
+      }
+    }
+  }
+}
+
+// Micro particle (spark from hi-hats)
+class MicroParticle {
+  constructor(x, y, color) {
+    this.x = x; this.y = y;
+    this.vx = (Math.random() - 0.5) * 5;
+    this.vy = (Math.random() - 0.5) * 5;
+    this.life = 1.0;
+    this.decay = 0.02 + Math.random() * 0.03;
+    this.size = 1 + Math.random() * 2.5;
+    this.color = color || WHITE;
+  }
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vx *= 0.93;
+    this.vy *= 0.93;
+    this.life -= this.decay;
+  }
+  draw(pg) {
+    if (this.life <= 0) return;
+    pg.noStroke();
+    pg.fill(this.color[0], this.color[1], this.color[2], this.life * 200);
+    pg.ellipse(this.x, this.y, this.size, this.size);
+  }
+}
+
+// ==========================================
+// TRANSITION OUT (0:49) — radial → horizontal flattening
+// ==========================================
+function getTransitionT(frame) {
+  // Transition begins at frame ~432 (last ~1s)
+  let transStart = TOTAL_FRAMES - FPS; // 432
+  if (frame < transStart) return 0;
+  return Math.min((frame - transStart) / FPS, 1.0);
+}
+
+// ==========================================
+// SETUP & DRAW
+// ==========================================
+
+function setup() {
+  createCanvas(W, H);
+  pixelDensity(1);
+  noLoop();
+  
+  trailLayer = createGraphics(W, H);
+  glowLayer = createGraphics(W, H);
+  
+  centralNode = new CentralNode();
+  for (let i = 0; i < PROFILES.length; i++) {
+    workerStreams.push(new WorkerStream(PROFILES[i], i));
+  }
+  
+  // Background particles (void texture)
+  for (let i = 0; i < 70; i++) {
+    bgParticles.push(new BgParticle());
+  }
+  
+  window._p5Ready = true;
+}
+
+function draw() {
+  let frame = frameCount;
+  let t = frame / FPS;
+  let audio = getAudioFeatures(frame);
+  let transT = getTransitionT(frame);
+  
+  // === UPDATE ===
+  centralNode.update(frame);
+  
+  if (frame === BEAT_DROP_FRAME) {
+    for (let ws of workerStreams) ws.launch();
+  }
+  
+  for (let ws of workerStreams) ws.update(frame);
+  for (let bp of bgParticles) bp.update();
+  
+  // Spawn sparks on hi-hats along active trails
+  if (audio.hihat && frame > BEAT_DROP_FRAME + 20) {
+    for (let ws of workerStreams) {
+      if (!ws.launched) continue;
+      let mainP = ws.particles[Math.floor(Math.random() * Math.min(5, ws.particles.length))];
+      if (mainP && mainP.progress > 0.1 && mainP.progress < 0.95) {
+        let sparkColor = mainP.progress > 0.5 ? BLUE_MID : GOLD;
+        microParticles.push(new MicroParticle(
+          mainP.x + (Math.random()-0.5) * 12,
+          mainP.y + (Math.random()-0.5) * 12,
+          sparkColor
+        ));
+      }
+    }
+  }
+  
+  // Spawn orbit sparks on kicks (after arrival)
+  if (audio.kick && frame > BEAT_DROP_FRAME + 80) {
+    for (let ws of workerStreams) {
+      if (ws.arrived) {
+        for (let i = 0; i < 2; i++) {
+          microParticles.push(new MicroParticle(
+            ws.targetX + (Math.random()-0.5) * 25,
+            ws.targetY + (Math.random()-0.5) * 25,
+            BLUE_MID
+          ));
+        }
+      }
+    }
+  }
+  
+  for (let mp of microParticles) mp.update();
+  microParticles = microParticles.filter(mp => mp.life > 0);
+  
+  // === TRAIL LAYER (persistent, slowly fading) ===
+  trailLayer.loadPixels();
+  let px = trailLayer.pixels;
+  // Slow alpha fade — trails persist for comet tail effect
+  for (let i = 3; i < px.length; i += 4) {
+    px[i] = Math.max(0, px[i] - 2);
+  }
+  trailLayer.updatePixels();
+  
+  for (let ws of workerStreams) ws.drawTrails(trailLayer);
+  
+  // === GLOW LAYER ===
+  glowLayer.clear();
+  
+  // Background: subtle radial gradient from center (post-explosion echo)
+  if (frame > BEAT_DROP_FRAME) {
+    let echoAge = (frame - BEAT_DROP_FRAME) / FPS;
+    let echoInt = Math.max(0.04, 0.5 - echoAge * 0.025);
+    let maxR = 250 + echoAge * 20;
+    for (let r = maxR; r > 0; r -= 20) {
+      let a = echoInt * (1 - r / maxR) * 15;
+      glowLayer.noStroke();
+      glowLayer.fill(0, 0, 50, a);
+      glowLayer.ellipse(W/2, H/2, r * 2, r * 2);
+    }
+  }
+  
+  // Lane guide lines (subtle navy radial lines)
+  if (frame > BEAT_DROP_FRAME + 8) {
+    let laneAlpha = Math.min((frame - BEAT_DROP_FRAME - 8) / 50, 0.4) * 20;
+    glowLayer.stroke(NAVY[0], NAVY[1], NAVY[2], laneAlpha);
+    glowLayer.strokeWeight(0.6);
+    for (let ws of workerStreams) {
+      if (ws.launched) {
+        glowLayer.line(W/2, H/2, ws.targetX, ws.targetY);
+      }
+    }
+  }
+  
+  // Draw shockwave ring
+  drawShockwave(glowLayer, frame);
+  
+  // Central node (pre-explosion or residual)
+  centralNode.draw(glowLayer);
+  centralNode.drawResidual(glowLayer, frame);
+  
+  // Connection lines (nerve fibers — gold, pulsing)
+  for (let ws of workerStreams) ws.drawConnection(glowLayer, audio);
+  
+  // Particles (main dots moving outward)
+  for (let ws of workerStreams) ws.drawParticles(glowLayer);
+  for (let ws of workerStreams) ws.drawOrbitParticles(glowLayer, frame);
+  
+  // Worker stations
+  for (let ws of workerStreams) ws.drawStation(glowLayer, audio);
+  for (let ws of workerStreams) ws.drawLabel(glowLayer);
+  
+  // Micro particles (sparks)
+  for (let mp of microParticles) mp.draw(glowLayer);
+  
+  // Kick flash — whole-frame brightness pulse
+  if (audio.kick && frame > BEAT_DROP_FRAME) {
+    glowLayer.noStroke();
+    glowLayer.fill(GOLD[0], GOLD[1], GOLD[2], 6);
+    glowLayer.rect(0, 0, W, H);
+  }
+  
+  // BEAT DROP FLASH — the moment of explosion gets a white-hot flash
+  if (frame >= BEAT_DROP_FRAME && frame < BEAT_DROP_FRAME + 5) {
+    let flashT = (frame - BEAT_DROP_FRAME) / 5;
+    let flashAlpha = (1 - flashT) * (1 - flashT) * 120; // strong quadratic decay
+    glowLayer.noStroke();
+    glowLayer.fill(255, 240, 180, flashAlpha);
+    glowLayer.rect(0, 0, W, H);
+  }
+  
+  // === COMPOSE FINAL FRAME ===
+  blendMode(BLEND);
+  background(0);
+  
+  // Background particles (void texture)
+  for (let bp of bgParticles) bp.draw(this);
+  
+  // Trails (normal blend — trails already have correct alpha from prior draws)
+  image(trailLayer, 0, 0);
+  
+  // Main content
+  image(glowLayer, 0, 0);
+  
+  // === FADE ENVELOPE ===
+  // Very brief fade in (3 frames only — the node should already be visible)
+  if (frame <= 3) {
+    let fade = 1 - smoothstep(frame / 3);
+    fill(0, 0, 0, fade * 200);
+    noStroke();
+    rect(0, 0, W, H);
+  }
+  // Fade out at end
+  if (frame > TOTAL_FRAMES - 18) {
+    let fade = smoothstep((frame - (TOTAL_FRAMES - 18)) / 18);
+    fill(0, 0, 0, fade * 255);
+    noStroke();
+    rect(0, 0, W, H);
+  }
+}
+</script>
+</body>
+</html>

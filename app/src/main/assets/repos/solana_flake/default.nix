@@ -1,0 +1,225 @@
+{
+  pkgs,
+}:
+with pkgs;
+rec {
+  platforms = import ./platforms.nix pkgs;
+
+  agave-src = pkgs.fetchFromGitHub {
+    owner = "anza-xyz";
+    repo = "agave";
+    rev = "v${platforms.sol-version}";
+    fetchSubmodules = true;
+    sha256 = "sha256-3wvXHY527LOvQ8b4UfXoIKSgwDq7Sm/c2qqj2unlN6I=";
+  };
+
+  solana-cargo-build-sbf =
+    with pkgs;
+    rustPlatform.buildRustPackage {
+      pname = "solana-cargo-build-sbf";
+      version = platforms.sol-version;
+
+      src = agave-src;
+      buildAndTestSubdir = "sdk/cargo-build-sbf";
+
+      cargoLock = {
+        lockFile = "${agave-src}/Cargo.lock";
+        outputHashes = {
+          "crossbeam-epoch-0.9.5" = "sha256-Jf0RarsgJiXiZ+ddy0vp4jQ59J9m0k3sgXhWhCdhgws=";
+          "curve25519-dalek-3.2.1" = "sha256-4MF/qaP+EhfYoRETqnwtaCKC1tnUJlBCxeOPCnKrTwQ=";
+          "tokio-1.29.1" = "sha256-Z/kewMCqkPVTXdoBcSaFKG5GSQAdkdpj3mAzLLCjjGk=";
+        };
+      };
+
+      nativeBuildInputs = [
+        pkg-config
+        perl
+        cmake
+        clang
+        libclang.lib
+        protobuf
+      ];
+
+      buildInputs = [
+        clang
+        libclang.lib
+        libedit
+      ] ++ lib.optionals stdenv.isLinux [ udev ];
+
+      LIBCLANG_PATH = "${libclang.lib}/lib";
+      NIX_CFLAGS_COMPILE = "-I${libclang.lib}/clang/11.1.0/include";
+
+      doCheck = false;
+
+      cargoPatches = [
+        ./cargo-build-sbf-main.diff
+      ];
+    };
+
+  solana-platform-tools = stdenv.mkDerivation rec {
+    name = "solana-platform-tools";
+    version = platforms.platform-tools.version;
+    src = platforms.platform-tools.${system};
+    nativeBuildInputs = lib.optionals stdenv.isLinux [ autoPatchelfHook ];
+    buildInputs = [
+      # Auto patching
+      zlib
+      stdenv.cc.cc
+      openssl
+      libclang.lib
+      xz
+      python310
+      libedit
+    ] ++ lib.optionals stdenv.isLinux [ udev ];
+
+    # to work around https://github.com/NixOS/nixpkgs/issues/218712
+    dontStrip = stdenv.isDarwin;
+
+    preFixup = lib.optionalString stdenv.isLinux ''
+      for file in $(find $out -type f -executable); do
+        if patchelf --print-needed "$file" 2>/dev/null | grep -q "libedit.so.2"; then
+          patchelf --replace-needed libedit.so.2 libedit.so.0.0.74 "$file"
+        fi
+      done
+    '';
+
+    installPhase = ''
+      mkdir -p $out/bin/sdk/sbf
+      cp -ar ${agave-src}/sdk/sbf/* $out/bin/sdk/sbf/
+
+      platformtools=$out/bin/sdk/sbf/dependencies/platform-tools
+      mkdir -p $platformtools
+      cp -r $src/llvm $platformtools;
+      cp -r $src/rust $platformtools;
+
+      # Make files writable so we can remove broken symlinks
+      chmod -R u+w $platformtools
+
+      # Fix broken symlinks by removing them (they're not essential for Solana builds)
+      # The _lldb.cpython symlink points to a missing liblldb.so
+      rm -f $platformtools/llvm/lib/python*/*-packages/lldb/_lldb.cpython-310-x86_64-linux-gnu.so
+
+      # The lldb-argdumper symlink points to a missing bin/lldb-argdumper
+      rm -f $platformtools/llvm/lib/python*/*-packages/lldb/lldb-argdumper
+
+      ls -la $platformtools;
+      chmod 0755 -R $out;
+      touch $platformtools-${version}.md
+
+      # Criterion is also needed
+      criterion=$out/bin/sdk/sbf/dependencies/criterion
+      mkdir $criterion
+      ln -s ${criterion.dev}/include $criterion/include
+      ln -s ${criterion}/lib $criterion/lib
+      ln -s ${criterion}/share $criterion/share
+      touch $criterion-v${criterion.version}.md
+    '';
+  };
+  solana = stdenv.mkDerivation {
+    name = "solana";
+    version = platforms.cli.version;
+    src = platforms.cli.${system};
+    nativeBuildInputs = lib.optionals stdenv.isLinux [ autoPatchelfHook ] ++ [
+      makeWrapper
+    ];
+
+    buildInputs =
+      with pkgs;
+      [
+        solana-platform-tools
+        stdenv.cc.cc.lib
+        libgcc
+        ocl-icd
+        zlib
+      ]
+      ++ lib.optionals stdenv.isLinux [
+        udev
+        sgx-sdk
+      ];
+
+    installPhase = ''
+      mkdir -p $out/bin/sdk/sbf/dependencies
+      cp -r $src/* $out
+      ln -s ${solana-platform-tools}/bin/sdk/sbf/dependencies/platform-tools $out/bin/sdk/sbf/dependencies/platform-tools
+      cp -rf ${solana-cargo-build-sbf}/* $out
+      chmod 0755 -R $out
+
+      # Wrap cargo-build-sbf binary
+      mv $out/bin/cargo-build-sbf $out/bin/.cargo-build-sbf-unwrapped
+      makeWrapper $out/bin/.cargo-build-sbf-unwrapped $out/bin/cargo-build-sbf \
+        --set SBF_SDK_PATH "${solana-platform-tools}/bin/sdk/sbf" \
+        --set RUSTC "${solana-platform-tools}/bin/sdk/sbf/dependencies/platform-tools/rust/bin/rustc"
+
+      # Wrap solana-test-validator with runtime deps it shells out to
+      mv $out/bin/solana-test-validator $out/bin/.solana-test-validator-unwrapped
+      makeWrapper $out/bin/.solana-test-validator-unwrapped $out/bin/solana-test-validator \
+        --prefix PATH : "${lib.makeBinPath [ gnutar bzip2 gnugrep ]}"
+    '';
+  };
+
+  solana-rust = stdenv.mkDerivation {
+    name = "solana-rust";
+    version = platforms.cli.version;
+    src = platforms.cli.${system};
+    nativeBuildInputs = lib.optionals stdenv.isLinux [ autoPatchelfHook ] ++ [
+      makeWrapper
+    ];
+
+    buildInputs =
+      with pkgs;
+      [
+        solana-platform-tools
+        stdenv.cc.cc.lib
+        libgcc
+        ocl-icd
+        zlib
+      ]
+      ++ lib.optionals stdenv.isLinux [
+        udev
+        sgx-sdk
+      ];
+
+    installPhase = ''
+      mkdir -p $out/bin/sdk/sbf/dependencies
+      cp -r $src/* $out
+      ln -s ${solana-platform-tools}/bin/sdk/sbf/dependencies/platform-tools $out/bin/sdk/sbf/dependencies/platform-tools 
+
+      cp -rf ${solana-platform-tools}/bin/sdk/sbf/dependencies/platform-tools/rust/* $out
+      chmod 0755 -R $out
+    '';
+  };
+
+  anchor = rustPlatform.buildRustPackage rec {
+    pname = "anchor";
+    version = "pre";
+
+    src = fetchFromGitHub {
+      owner = "coral-xyz";
+      repo = "anchor";
+      rev = "a7a23eea308440a9fa9cb79cee7bddd30ab163d5";
+      hash = "sha256-xqKZxxKOjw1QFVfA9pNTvbcbP+ZWF0BpDCBlN6RjBNg=";
+      fetchSubmodules = true;
+    };
+
+    cargoHash = "sha256-popy49tMI0SFa0WA33+avB5JQ2jiIEmGRXtRkSjOtvs=";
+
+    nativeBuildInputs = [ makeWrapper ];
+
+    cargoPatches = [
+      ./anchor-idl-build.diff
+      ./anchor-disable-avm.patch
+    ];
+
+    checkFlags = [
+      "--skip=tests::test_check_and_get_full_commit_when_full_commit"
+      "--skip=tests::test_check_and_get_full_commit_when_partial_commit"
+      "--skip=tests::test_get_anchor_version_from_commit"
+    ];
+
+    postInstall = ''
+      mv $out/bin/anchor $out/bin/.anchor-unwrapped
+      makeWrapper $out/bin/.anchor-unwrapped $out/bin/anchor \
+        --set RUSTC "${solana-platform-tools}/bin/sdk/sbf/dependencies/platform-tools/rust/bin/rustc"
+    '';
+  };
+}

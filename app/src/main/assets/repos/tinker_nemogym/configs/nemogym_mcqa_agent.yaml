@@ -1,0 +1,27 @@
+# nemo-gym SimpleAgent + policy_model for the `mcqa` env. The policy_model
+# re-points at our shim (same rationale as nemogym_agent.yaml).
+
+policy_model:
+  responses_api_models:
+    openai_model:
+      entrypoint: app.py
+      openai_base_url: http://127.0.0.1:8001/v1
+      openai_api_key: tinker-nemogym-shim
+      openai_model: tinker
+      extra_body: {}
+
+mcqa_simple_agent:
+  responses_api_agents:
+    simple_agent:
+      entrypoint: app.py
+      resources_server:
+        type: resources_servers
+        name: mcqa
+      model_server:
+        type: responses_api_models
+        name: policy_model
+      datasets:
+      - name: example
+        type: example
+        # Path resolved relative to the nemo-gym repo root (ng_run's cwd).
+        jsonl_fpath: resources_servers/mcqa/data/example.jsonl

@@ -78,7 +78,8 @@ public class RepoLibraryActivity extends Activity {
             String src = p.optString("source", "");
             rows.add(new Object[]{"📦  " + p.optString("name", "?"),
                     src.isEmpty() ? (p.optInt("count", 0) + " ملفًا  ·  " + human(p.optLong("bytes", 0)))
-                                  : (src + "  ·  " + p.optInt("count", 0) + " ملفًا  ·  " + human(p.optLong("bytes", 0)))});
+                                  : (src + "  ·  " + p.optInt("count", 0) + " ملفًا  ·  " + human(p.optLong("bytes", 0))),
+                    T_PROJ + String.valueOf(i)});
         }
         sub.setText(total + " ملفًا · " + human(bytes) + " · " + projects.length() + " " + getString(R.string.repo_projects_count));
         adapter.notifyDataSetChanged();
@@ -126,11 +127,27 @@ public class RepoLibraryActivity extends Activity {
 
     private static final int T_DIR = 1;
     private static final int T_FILE = 2;
+    private static final int T_PROJ = 3;
 
     private void openRow(int pos) {
+        if (pos < 0 || pos >= rows.size()) return;
         Object[] row = rows.get(pos);
+        if (row == null || row.length < 3 || row[2] == null) {
+            // صف غير معروف: افتح المشروع المقابل إن كنا في الجذر
+            if (projectIdx < 0 && pos < projects.length()) { projectIdx = pos; dirStack.clear(); showLevel(); }
+            return;
+        }
         String tag = (String) row[2];
-        if (tag.startsWith(String.valueOf(T_FILE))) {
+        if (tag.startsWith(String.valueOf(T_PROJ))) {
+            try {
+                int idx = Integer.parseInt(tag.substring(1));
+                if (idx >= 0 && idx < projects.length()) {
+                    projectIdx = idx;
+                    dirStack.clear();
+                    showLevel();
+                }
+            } catch (NumberFormatException ignored) { }
+        } else if (tag.startsWith(String.valueOf(T_FILE))) {
             String rel = tag.substring(1);
             JSONObject p = projects.optJSONObject(projectIdx);
             if (p == null) return;

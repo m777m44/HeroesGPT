@@ -1,0 +1,22 @@
+# Outputs (binary, uploaded separately)
+output/
+scenes/
+checkpoints/
+audio/
+
+# Build artifacts
+__pycache__/
+*.pyc
+*.wav
+*.mp3
+*.mp4
+*.png
+*.jpg
+*.zip
+
+# Hermes runtime
+.hermes/
+
+# OS
+.DS_Store
+Thumbs.db

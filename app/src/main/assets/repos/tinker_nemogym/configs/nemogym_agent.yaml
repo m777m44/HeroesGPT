@@ -1,0 +1,39 @@
+# nemo-gym SimpleAgent + policy_model pointing at the tinker-nemogym
+# FastAPI shim on localhost:8001 (instead of vllm_model / openai_model).
+#
+# We use the `openai_model` server type (not `vllm_model`): our shim speaks
+# the OpenAI Responses API directly and attaches TokenIDLogProbMixin fields
+# (``prompt_token_ids``, ``generation_token_ids``, ``generation_log_probs``)
+# on each output message. `openai_model` forwards /v1/responses verbatim
+# and `NeMoGymResponse.model_validate` picks the "ForTraining" output-item
+# variant automatically when those fields are present.
+#
+# The `vllm_model` path is unsuitable here because it eagerly calls
+# /v1/chat/completions with ``logprobs=True, return_tokens_as_token_ids=True``
+# and then parses ``choice.logprobs.content`` in vLLM's native shape — which
+# our shim doesn't produce.
+
+policy_model:
+  responses_api_models:
+    openai_model:
+      entrypoint: app.py
+      openai_base_url: http://127.0.0.1:8001/v1
+      openai_api_key: tinker-nemogym-shim
+      openai_model: tinker
+      extra_body: {}
+
+example_single_tool_call_simple_agent:
+  responses_api_agents:
+    simple_agent:
+      entrypoint: app.py
+      resources_server:
+        type: resources_servers
+        name: example_single_tool_call
+      model_server:
+        type: responses_api_models
+        name: policy_model
+      datasets:
+      - name: example
+        type: example
+        # Path resolved relative to the nemo-gym repo root (ng_run's cwd).
+        jsonl_fpath: resources_servers/example_single_tool_call/data/example.jsonl

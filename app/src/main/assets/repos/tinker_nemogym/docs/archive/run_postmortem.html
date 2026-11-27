@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>tinker-nemogym — MCQA Live Run Postmortem</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: #020617;
+    color: white;
+    padding: 2rem;
+    min-height: 100vh;
+  }
+  .container { max-width: 1600px; margin: 0 auto; }
+  .header { margin-bottom: 2rem; }
+  .header-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+  .pulse-dot {
+    width: 12px; height: 12px; background: #22d3ee; border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  h1 { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.025em; }
+  .subtitle { color: #94a3b8; font-size: 0.9rem; margin-left: 1.75rem; }
+
+  h2 {
+    font-size: 1.15rem; font-weight: 600; margin: 2rem 0 1rem 0;
+    padding-left: 0.75rem; border-left: 3px solid #22d3ee;
+  }
+  .panel {
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 1rem;
+    border: 1px solid #1e293b;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+  }
+  svg { display: block; width: 100%; }
+
+  .grid-2 { display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; }
+  @media (max-width: 1200px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; }
+  .stat {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid #1e293b;
+    border-radius: 0.6rem;
+    padding: 0.8rem 1rem;
+  }
+  .stat-label { color: #64748b; font-size: 0.7rem; letter-spacing: 0.05em; text-transform: uppercase; }
+  .stat-value { color: white; font-size: 1.4rem; font-weight: 700; margin-top: 0.2rem; }
+  .stat-sub { color: #94a3b8; font-size: 0.75rem; margin-top: 0.1rem; }
+
+  .footer { text-align: center; margin-top: 2rem; color: #475569; font-size: 0.75rem; }
+
+  /* Step chip colors */
+  .chip-good { color: #34d399; }
+  .chip-bad { color: #fb7185; }
+  .chip-neutral { color: #94a3b8; }
+  .chip-hl { color: #fbbf24; }
+
+  /* Inline code */
+  code {
+    background: rgba(34,211,238,0.08);
+    color: #22d3ee;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.85em;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ========== HEADER ========== -->
+<div class="header">
+  <div class="header-row">
+    <div class="pulse-dot"></div>
+    <h1>tinker-nemogym  •  MCQA Live Run Postmortem</h1>
+  </div>
+  <p class="subtitle">meta-llama/Llama-3.1-8B-Instruct + LoRA rank-32 → real Tinker cloud → 5-step GRPO on biology MCQA</p>
+</div>
+
+<!-- ========== KEY STATS ========== -->
+<div class="stat-grid">
+  <div class="stat"><div class="stat-label">Base model</div><div class="stat-value" style="font-size:.9rem">Llama-3.1-8B-Instruct</div><div class="stat-sub">LoRA rank 32</div></div>
+  <div class="stat"><div class="stat-label">Steps</div><div class="stat-value">5</div><div class="stat-sub">3 trained · 2 skipped</div></div>
+  <div class="stat"><div class="stat-label">Mean reward</div><div class="stat-value" style="color:#34d399">0.688</div><div class="stat-sub">best group · step 0</div></div>
+  <div class="stat"><div class="stat-label">Best loss</div><div class="stat-value" style="color:#22d3ee">0.12</div><div class="stat-sub">step 3 · after warm-up</div></div>
+  <div class="stat"><div class="stat-label">Hot swaps</div><div class="stat-value">4</div><div class="stat-sub">save_count 1 → 4</div></div>
+  <div class="stat"><div class="stat-label">Checkpoints</div><div class="stat-value">2</div><div class="stat-sub">smoke_mcqa-step-{2,4}</div></div>
+  <div class="stat"><div class="stat-label">Total wall time</div><div class="stat-value">~45s</div><div class="stat-sub">excl. setup</div></div>
+  <div class="stat"><div class="stat-label">Tinker calls</div><div class="stat-value">~7</div><div class="stat-sub">fwd_bwd + optim</div></div>
+</div>
+
+<!-- ========== TIMELINE ========== -->
+<h2>① The full 5-step timeline (real run data)</h2>
+<div class="panel">
+<svg viewBox="0 0 1500 360" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <pattern id="grid1" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+    <marker id="arr1" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#grid1)"/>
+
+  <!-- x-axis timeline -->
+  <line x1="60" y1="180" x2="1440" y2="180" stroke="#475569" stroke-width="1.5"/>
+
+  <!-- STEP 0: trained, loss=-3.01 -->
+  <g>
+    <circle cx="180" cy="180" r="32" fill="rgba(52, 211, 153, 0.25)" stroke="#34d399" stroke-width="2"/>
+    <text x="180" y="186" text-anchor="middle" font-size="17" font-weight="700" fill="#34d399">0</text>
+    <text x="180" y="120" text-anchor="middle" font-size="12" font-weight="600" fill="white">TRAINED</text>
+    <text x="180" y="235" text-anchor="middle" font-size="11" fill="#34d399" font-weight="600">reward 0.688</text>
+    <text x="180" y="250" text-anchor="middle" font-size="10" fill="#22d3ee">loss -3.0095</text>
+    <text x="180" y="264" text-anchor="middle" font-size="9" fill="#94a3b8">n_datums=8 dropped=1</text>
+    <text x="180" y="282" text-anchor="middle" font-size="9" fill="#94a3b8">save_count=2</text>
+    <text x="180" y="104" text-anchor="middle" font-size="9" fill="#64748b">11:43:32</text>
+  </g>
+
+  <!-- STEP 1: trained, loss=23.6 -->
+  <g>
+    <circle cx="430" cy="180" r="32" fill="rgba(251, 191, 36, 0.22)" stroke="#fbbf24" stroke-width="2"/>
+    <text x="430" y="186" text-anchor="middle" font-size="17" font-weight="700" fill="#fbbf24">1</text>
+    <text x="430" y="120" text-anchor="middle" font-size="12" font-weight="600" fill="white">TRAINED</text>
+    <text x="430" y="104" text-anchor="middle" font-size="9" fill="#fbbf24">(high loss = divergent)</text>
+    <text x="430" y="235" text-anchor="middle" font-size="11" fill="#fb7185" font-weight="600">reward 0.312</text>
+    <text x="430" y="250" text-anchor="middle" font-size="10" fill="#fbbf24">loss 23.6185</text>
+    <text x="430" y="264" text-anchor="middle" font-size="9" fill="#94a3b8">n_datums=8 dropped=1</text>
+    <text x="430" y="278" text-anchor="middle" font-size="9" fill="#94a3b8">save_count=3</text>
+    <text x="430" y="292" text-anchor="middle" font-size="9" fill="#fb923c" font-weight="600">+ ckpt step-2 saved</text>
+  </g>
+
+  <!-- STEP 2: SKIPPED -->
+  <g>
+    <circle cx="680" cy="180" r="32" fill="rgba(251, 113, 133, 0.18)" stroke="#fb7185" stroke-width="2" stroke-dasharray="4,3"/>
+    <text x="680" y="186" text-anchor="middle" font-size="17" font-weight="700" fill="#fb7185">2</text>
+    <text x="680" y="120" text-anchor="middle" font-size="12" font-weight="600" fill="#fb7185">SKIPPED</text>
+    <text x="680" y="104" text-anchor="middle" font-size="9" fill="#fb7185">constant reward</text>
+    <text x="680" y="235" text-anchor="middle" font-size="11" fill="#94a3b8" font-weight="600">reward 1.000</text>
+    <text x="680" y="250" text-anchor="middle" font-size="10" fill="#64748b">(no signal)</text>
+    <text x="680" y="264" text-anchor="middle" font-size="9" fill="#94a3b8">n_datums=0 dropped=2</text>
+  </g>
+
+  <!-- STEP 3: trained, loss=0.12 BEST -->
+  <g>
+    <circle cx="930" cy="180" r="34" fill="rgba(34, 211, 238, 0.28)" stroke="#22d3ee" stroke-width="2.5"/>
+    <text x="930" y="186" text-anchor="middle" font-size="18" font-weight="700" fill="#22d3ee">3</text>
+    <text x="930" y="120" text-anchor="middle" font-size="12" font-weight="600" fill="white">TRAINED</text>
+    <text x="930" y="104" text-anchor="middle" font-size="9" fill="#22d3ee">★ best loss</text>
+    <text x="930" y="235" text-anchor="middle" font-size="11" fill="#fb7185" font-weight="600">reward 0.438</text>
+    <text x="930" y="250" text-anchor="middle" font-size="10" fill="#22d3ee" font-weight="600">loss 0.1169</text>
+    <text x="930" y="264" text-anchor="middle" font-size="9" fill="#94a3b8">n_datums=8 dropped=1</text>
+    <text x="930" y="278" text-anchor="middle" font-size="9" fill="#94a3b8">save_count=4</text>
+    <text x="930" y="292" text-anchor="middle" font-size="9" fill="#fb923c" font-weight="600">+ ckpt step-4 saved</text>
+  </g>
+
+  <!-- STEP 4: SKIPPED -->
+  <g>
+    <circle cx="1180" cy="180" r="32" fill="rgba(251, 113, 133, 0.18)" stroke="#fb7185" stroke-width="2" stroke-dasharray="4,3"/>
+    <text x="1180" y="186" text-anchor="middle" font-size="17" font-weight="700" fill="#fb7185">4</text>
+    <text x="1180" y="120" text-anchor="middle" font-size="12" font-weight="600" fill="#fb7185">SKIPPED</text>
+    <text x="1180" y="104" text-anchor="middle" font-size="9" fill="#fb7185">constant reward</text>
+    <text x="1180" y="235" text-anchor="middle" font-size="11" fill="#94a3b8" font-weight="600">reward 1.000</text>
+    <text x="1180" y="250" text-anchor="middle" font-size="10" fill="#64748b">(no signal)</text>
+    <text x="1180" y="264" text-anchor="middle" font-size="9" fill="#94a3b8">n_datums=0 dropped=2</text>
+  </g>
+
+  <!-- EXIT -->
+  <g>
+    <rect x="1370" y="162" width="70" height="36" rx="6" fill="rgba(52, 211, 153, 0.2)" stroke="#34d399" stroke-width="1.5"/>
+    <text x="1405" y="185" text-anchor="middle" font-size="11" font-weight="700" fill="#34d399">EXIT 0</text>
+  </g>
+
+  <!-- Connecting hot-swap arrows -->
+  <path d="M 212 180 Q 305 140 398 180" fill="none" stroke="#fb923c" stroke-width="2" marker-end="url(#arr1)"/>
+  <text x="305" y="135" text-anchor="middle" font-size="9" fill="#fb923c" font-weight="600">hot-swap</text>
+  <path d="M 462 180 Q 555 140 648 180" fill="none" stroke="#fb923c" stroke-width="2" marker-end="url(#arr1)"/>
+  <text x="555" y="135" text-anchor="middle" font-size="9" fill="#fb923c" font-weight="600">hot-swap</text>
+  <path d="M 712 180 Q 805 140 896 180" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr1)" stroke-dasharray="4,2"/>
+  <text x="805" y="135" text-anchor="middle" font-size="9" fill="#64748b">(no swap)</text>
+  <path d="M 964 180 Q 1057 140 1148 180" fill="none" stroke="#fb923c" stroke-width="2" marker-end="url(#arr1)"/>
+  <text x="1057" y="135" text-anchor="middle" font-size="9" fill="#fb923c" font-weight="600">hot-swap</text>
+  <path d="M 1212 180 Q 1290 140 1368 180" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr1)" stroke-dasharray="4,2"/>
+
+  <!-- Legend -->
+  <g transform="translate(60, 320)">
+    <circle cx="10" cy="6" r="6" fill="rgba(52,211,153,0.25)" stroke="#34d399"/>
+    <text x="22" y="10" font-size="10" fill="#94a3b8">TRAINED · produced real gradient</text>
+    <circle cx="270" cy="6" r="6" fill="rgba(251,113,133,0.18)" stroke="#fb7185" stroke-dasharray="2,1"/>
+    <text x="282" y="10" font-size="10" fill="#94a3b8">SKIPPED · constant reward</text>
+    <line x1="500" y1="6" x2="520" y2="6" stroke="#fb923c" stroke-width="2" marker-end="url(#arr1)"/>
+    <text x="528" y="10" font-size="10" fill="#94a3b8">hot-swap sampler · weights updated</text>
+  </g>
+</svg>
+</div>
+
+<!-- ========== 2-COLUMN: FLOW + LOSS CURVE ========== -->
+<h2>② What happens inside ONE step (zoomed)</h2>
+<div class="grid-2">
+
+<!-- LEFT: zoom into one step -->
+<div class="panel">
+<svg viewBox="0 0 900 720" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <pattern id="grid2" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+    <marker id="a2" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+    <marker id="a2c" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee"/>
+    </marker>
+    <marker id="a2e" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#34d399"/>
+    </marker>
+    <marker id="a2o" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#fb923c"/>
+    </marker>
+    <marker id="a2v" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa"/>
+    </marker>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#grid2)"/>
+
+  <!-- Swimlanes -->
+  <rect x="10" y="40" width="200" height="660" rx="8" fill="rgba(6, 78, 59, 0.08)" stroke="#34d399" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="110" y="30" text-anchor="middle" font-size="11" font-weight="700" fill="#34d399">TRAINER</text>
+
+  <rect x="230" y="40" width="200" height="660" rx="8" fill="rgba(251, 146, 60, 0.08)" stroke="#fb923c" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="330" y="30" text-anchor="middle" font-size="11" font-weight="700" fill="#fb923c">SHIM :8001</text>
+
+  <rect x="450" y="40" width="200" height="660" rx="8" fill="rgba(251, 191, 36, 0.06)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="550" y="30" text-anchor="middle" font-size="11" font-weight="700" fill="#fbbf24">NEMO-GYM AGENT</text>
+
+  <rect x="670" y="40" width="220" height="660" rx="8" fill="rgba(76, 29, 149, 0.1)" stroke="#a78bfa" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="780" y="30" text-anchor="middle" font-size="11" font-weight="700" fill="#a78bfa">TINKER CLOUD</text>
+
+  <!-- Row 1: 16 rollouts fan-out -->
+  <rect x="25" y="60" width="170" height="38" rx="5" fill="rgba(6,78,59,0.35)" stroke="#34d399" stroke-width="1.3"/>
+  <text x="110" y="76" text-anchor="middle" font-size="10" fill="white" font-weight="600">rollout_batch</text>
+  <text x="110" y="90" text-anchor="middle" font-size="8.5" fill="#94a3b8">2 prompts × 8 = 16 calls</text>
+  <line x1="195" y1="79" x2="235" y2="79" stroke="#34d399" stroke-width="1.5" marker-end="url(#a2e)"/>
+  <text x="215" y="73" text-anchor="middle" font-size="8" fill="#34d399">POST /run × 16</text>
+
+  <rect x="240" y="60" width="180" height="38" rx="5" fill="rgba(251,191,36,0.2)" stroke="#fbbf24" stroke-width="1"/>
+  <text x="330" y="76" text-anchor="middle" font-size="10" fill="white" font-weight="600">SimpleAgent /run</text>
+  <text x="330" y="90" text-anchor="middle" font-size="8.5" fill="#94a3b8">takes MCQA prompt</text>
+  <line x1="420" y1="79" x2="455" y2="79" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#a2)"/>
+
+  <rect x="460" y="60" width="180" height="38" rx="5" fill="rgba(251,191,36,0.2)" stroke="#fbbf24" stroke-width="1"/>
+  <text x="550" y="76" text-anchor="middle" font-size="10" fill="white" font-weight="600">ResourcesServer</text>
+  <text x="550" y="90" text-anchor="middle" font-size="8.5" fill="#94a3b8">verify(answer) → reward</text>
+
+  <!-- Row 2: sampling call -->
+  <rect x="240" y="130" width="180" height="48" rx="5" fill="rgba(251,146,60,0.3)" stroke="#fb923c" stroke-width="1.5"/>
+  <text x="330" y="148" text-anchor="middle" font-size="10" fill="white" font-weight="600">/v1/responses</text>
+  <text x="330" y="161" text-anchor="middle" font-size="8.5" fill="#94a3b8">renderer.build_generation_prompt</text>
+  <text x="330" y="172" text-anchor="middle" font-size="8.5" fill="#fb923c">_current_sampling_client (lock)</text>
+
+  <line x1="420" y1="154" x2="665" y2="154" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#a2v)"/>
+  <text x="540" y="148" text-anchor="middle" font-size="8.5" fill="#a78bfa">sample_async(prompt, SamplingParams)</text>
+
+  <rect x="680" y="130" width="200" height="48" rx="5" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="780" y="148" text-anchor="middle" font-size="10" fill="white" font-weight="600">SamplingClient</text>
+  <text x="780" y="161" text-anchor="middle" font-size="8.5" fill="#a78bfa">Llama-3.1-8B on Tinker GPUs</text>
+  <text x="780" y="173" text-anchor="middle" font-size="8.5" fill="#94a3b8">returns tokens + logprobs</text>
+
+  <!-- Row 3: response back -->
+  <path d="M 680 178 L 420 178" fill="none" stroke="#a78bfa" stroke-width="1.3" marker-end="url(#a2v)" stroke-dasharray="4,2"/>
+  <text x="550" y="194" text-anchor="middle" font-size="8.5" fill="#a78bfa">tokens[N], logprobs[N], stop_reason</text>
+
+  <!-- Row 4: shim attaches TokenIDLogProbMixin -->
+  <rect x="240" y="210" width="180" height="40" rx="5" fill="rgba(251,146,60,0.2)" stroke="#fb923c" stroke-width="1"/>
+  <text x="330" y="227" text-anchor="middle" font-size="10" fill="white" font-weight="600">attach token fields</text>
+  <text x="330" y="241" text-anchor="middle" font-size="8" fill="#94a3b8">prompt_token_ids + gen_ids + log_probs</text>
+
+  <!-- Row 5: agent computes reward -->
+  <line x1="240" y1="230" x2="235" y2="230" stroke="#fb923c" stroke-width="1.5" marker-end="url(#a2o)"/>
+  <rect x="460" y="210" width="180" height="40" rx="5" fill="rgba(251,191,36,0.2)" stroke="#fbbf24" stroke-width="1"/>
+  <text x="550" y="227" text-anchor="middle" font-size="10" fill="white" font-weight="600">reward = 0 or 1</text>
+  <text x="550" y="241" text-anchor="middle" font-size="8" fill="#94a3b8">strict_single_letter_boxed</text>
+
+  <!-- Row 6: back to trainer -->
+  <path d="M 550 250 L 550 275 L 110 275 L 110 290" fill="none" stroke="#fbbf24" stroke-width="1.3" marker-end="url(#a2)" stroke-dasharray="4,2"/>
+  <text x="330" y="270" text-anchor="middle" font-size="8.5" fill="#fbbf24">{reward, response.output[*]}</text>
+
+  <!-- Row 7: datum_builder -->
+  <rect x="25" y="295" width="170" height="75" rx="5" fill="rgba(34,211,238,0.18)" stroke="#22d3ee" stroke-width="1.5"/>
+  <text x="110" y="312" text-anchor="middle" font-size="10" fill="white" font-weight="600">datum_builder</text>
+  <text x="110" y="326" text-anchor="middle" font-size="8" fill="#94a3b8">extract_trajectory</text>
+  <text x="110" y="338" text-anchor="middle" font-size="8" fill="#94a3b8">compute_advantages (GRPO)</text>
+  <text x="110" y="350" text-anchor="middle" font-size="8" fill="#94a3b8">drop constant groups</text>
+  <text x="110" y="362" text-anchor="middle" font-size="8" fill="#22d3ee" font-weight="600">build_datum(shift + sentinels)</text>
+
+  <!-- Row 8: datums to Tinker -->
+  <line x1="195" y1="332" x2="675" y2="332" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#a2c)"/>
+  <text x="435" y="326" text-anchor="middle" font-size="8.5" fill="#22d3ee">list[tinker.Datum]</text>
+
+  <rect x="680" y="300" width="200" height="64" rx="5" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="780" y="318" text-anchor="middle" font-size="10" fill="white" font-weight="600">forward_backward_async</text>
+  <text x="780" y="332" text-anchor="middle" font-size="8.5" fill="#a78bfa">loss_fn=importance_sampling</text>
+  <text x="780" y="346" text-anchor="middle" font-size="8.5" fill="#94a3b8">grads computed on GPU</text>
+  <text x="780" y="358" text-anchor="middle" font-size="8.5" fill="#22d3ee" font-weight="600">→ loss value returned</text>
+
+  <!-- Row 9: optim step -->
+  <rect x="680" y="380" width="200" height="40" rx="5" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+  <text x="780" y="397" text-anchor="middle" font-size="10" fill="white" font-weight="600">optim_step_async</text>
+  <text x="780" y="411" text-anchor="middle" font-size="8" fill="#94a3b8">AdamParams(lr=5e-4, β=.9/.95)</text>
+
+  <!-- Row 10: hot-swap -->
+  <rect x="680" y="440" width="200" height="52" rx="5" fill="rgba(251,146,60,0.3)" stroke="#fb923c" stroke-width="2"/>
+  <text x="780" y="458" text-anchor="middle" font-size="10" fill="white" font-weight="600">save_weights_and_get_</text>
+  <text x="780" y="470" text-anchor="middle" font-size="10" fill="white" font-weight="600">sampling_client_async</text>
+  <text x="780" y="485" text-anchor="middle" font-size="8.5" fill="#fb923c">→ fresh SamplingClient</text>
+
+  <!-- Row 11: swap back -->
+  <path d="M 680 466 L 420 466" fill="none" stroke="#fb923c" stroke-width="2" marker-end="url(#a2o)"/>
+  <text x="550" y="482" text-anchor="middle" font-size="9" fill="#fb923c" font-weight="600">set_sampling_client(new)</text>
+
+  <rect x="240" y="450" width="180" height="40" rx="5" fill="rgba(251,146,60,0.25)" stroke="#fb923c" stroke-width="2"/>
+  <text x="330" y="467" text-anchor="middle" font-size="10" fill="white" font-weight="700">HOT SWAP</text>
+  <text x="330" y="481" text-anchor="middle" font-size="8.5" fill="#fb923c">lock → _current = new</text>
+
+  <!-- Row 12: checkpoint (conditional) -->
+  <rect x="680" y="510" width="200" height="44" rx="5" fill="rgba(76,29,149,0.25)" stroke="#a78bfa" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="780" y="528" text-anchor="middle" font-size="10" fill="white" font-weight="600">save_state_async</text>
+  <text x="780" y="542" text-anchor="middle" font-size="8.5" fill="#94a3b8">every save_every steps</text>
+
+  <rect x="25" y="510" width="170" height="44" rx="5" fill="rgba(34,211,238,0.15)" stroke="#22d3ee" stroke-width="1"/>
+  <text x="110" y="527" text-anchor="middle" font-size="10" fill="white" font-weight="600">log metrics</text>
+  <text x="110" y="541" text-anchor="middle" font-size="8" fill="#94a3b8">wandb.log + step log line</text>
+
+  <!-- timing hints on the side -->
+  <g transform="translate(0, 595)">
+    <rect x="25" y="0" width="855" height="55" rx="6" fill="rgba(15,23,42,0.85)" stroke="#1e293b" stroke-width="1"/>
+    <text x="35" y="18" font-size="10" fill="white" font-weight="600">Timings (step 0, observed):</text>
+    <text x="35" y="36" font-size="9.5" fill="#94a3b8">rollout fan-out: ~7s</text>
+    <text x="200" y="36" font-size="9.5" fill="#94a3b8">fwd_bwd + optim: ~2-3s</text>
+    <text x="400" y="36" font-size="9.5" fill="#94a3b8">hot-swap + new client: ~1s</text>
+    <text x="620" y="36" font-size="9.5" fill="#94a3b8">total per step: ~10s</text>
+    <text x="35" y="50" font-size="8.5" fill="#64748b">(cold start is one-time: ~15s LoRATrainingClient creation + ~1s initial sampler snapshot)</text>
+  </g>
+</svg>
+</div>
+
+<!-- RIGHT: embedded loss curve + key takeaways -->
+<div class="panel">
+<img src="e2e_walkthrough_curves.png" alt="Training curves" style="width:100%;border-radius:6px;margin-bottom:1rem;">
+<div style="font-size:0.85rem; line-height:1.6; color:#cbd5e1;">
+<div style="color:#22d3ee; font-weight:600; margin-bottom:0.4rem;">💡 Loss signature explained</div>
+<ul style="list-style:none; padding-left:0;">
+  <li style="margin-bottom:0.5rem;"><span style="color:#34d399">●</span> <b>Step 0: −3.01</b> — importance_sampling is a surrogate loss; sign isn't absolute. Policy agrees with itself here (ρ ≈ 1).</li>
+  <li style="margin-bottom:0.5rem;"><span style="color:#fbbf24">●</span> <b>Step 1: 23.6</b> — after step 0's optim, the NEW sampler produces tokens with different logprobs → importance ratio spikes. Classic one-step off-policy lag.</li>
+  <li style="margin-bottom:0.5rem;"><span style="color:#fb7185">●</span> <b>Step 2: SKIPPED</b> — all rollouts got reward=1 → advantages all 0 → gradient would be 0 → trainer skipped, no API spend.</li>
+  <li style="margin-bottom:0.5rem;"><span style="color:#22d3ee">●</span> <b>Step 3: 0.12</b> — settled back down. Sampler re-aligned with training distribution. <b>This is the "good" signature.</b></li>
+</ul>
+</div>
+</div>
+
+</div>  <!-- /grid-2 -->
+
+<!-- ========== DATUM ANATOMY ========== -->
+<h2>③ Anatomy of one <code>tinker.Datum</code> (the hardest part, unit-tested exhaustively)</h2>
+<div class="panel">
+<svg viewBox="0 0 1500 350" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <pattern id="grid3" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#grid3)"/>
+
+  <!-- Original full trajectory -->
+  <text x="30" y="30" fill="white" font-size="12" font-weight="700">Original token sequence (prompt + response)</text>
+  <g transform="translate(30, 40)">
+    <!-- prompt tokens -->
+    <g>
+      <rect x="0" y="0" width="40" height="30" fill="rgba(251,191,36,0.3)" stroke="#fbbf24"/><text x="20" y="20" text-anchor="middle" font-size="11" fill="white">128</text>
+      <rect x="42" y="0" width="40" height="30" fill="rgba(251,191,36,0.3)" stroke="#fbbf24"/><text x="62" y="20" text-anchor="middle" font-size="11" fill="white">256</text>
+      <rect x="84" y="0" width="40" height="30" fill="rgba(251,191,36,0.3)" stroke="#fbbf24"/><text x="104" y="20" text-anchor="middle" font-size="11" fill="white">1024</text>
+      <rect x="126" y="0" width="40" height="30" fill="rgba(251,191,36,0.3)" stroke="#fbbf24"/><text x="146" y="20" text-anchor="middle" font-size="11" fill="white">Q:</text>
+      <rect x="168" y="0" width="40" height="30" fill="rgba(251,191,36,0.3)" stroke="#fbbf24"/><text x="188" y="20" text-anchor="middle" font-size="11" fill="white">...</text>
+      <rect x="210" y="0" width="60" height="30" fill="rgba(251,191,36,0.3)" stroke="#fbbf24"/><text x="240" y="20" text-anchor="middle" font-size="11" fill="white">eot</text>
+    </g>
+    <!-- response tokens -->
+    <g transform="translate(275, 0)">
+      <rect x="0" y="0" width="40" height="30" fill="rgba(52,211,153,0.3)" stroke="#34d399"/><text x="20" y="20" text-anchor="middle" font-size="11" fill="white">\box</text>
+      <rect x="42" y="0" width="40" height="30" fill="rgba(52,211,153,0.3)" stroke="#34d399"/><text x="62" y="20" text-anchor="middle" font-size="11" fill="white">{</text>
+      <rect x="84" y="0" width="40" height="30" fill="rgba(52,211,153,0.3)" stroke="#34d399"/><text x="104" y="20" text-anchor="middle" font-size="11" fill="white">B</text>
+      <rect x="126" y="0" width="40" height="30" fill="rgba(52,211,153,0.3)" stroke="#34d399"/><text x="146" y="20" text-anchor="middle" font-size="11" fill="white">}</text>
+      <rect x="168" y="0" width="60" height="30" fill="rgba(52,211,153,0.3)" stroke="#34d399"/><text x="198" y="20" text-anchor="middle" font-size="11" fill="white">eot</text>
+    </g>
+
+    <text x="135" y="52" text-anchor="middle" font-size="9" fill="#fbbf24">PROMPT (n_prompt tokens)</text>
+    <text x="385" y="52" text-anchor="middle" font-size="9" fill="#34d399">RESPONSE (n_resp tokens)</text>
+  </g>
+
+  <!-- Shifted: input_tokens = all[:-1] -->
+  <text x="30" y="118" fill="white" font-size="12" font-weight="700">ModelInput (input_tokens = all[:-1])</text>
+  <g transform="translate(30, 130)">
+    <rect x="0" y="0" width="40" height="30" fill="rgba(251,191,36,0.3)" stroke="#fbbf24"/><text x="20" y="20" text-anchor="middle" font-size="11" fill="white">128</text>
+    <rect x="42" y="0" width="40" height="30" fill="rgba(251,191,36,0.3)" stroke="#fbbf24"/><text x="62" y="20" text-anchor="middle" font-size="11" fill="white">256</text>
+    <rect x="84" y="0" width="40" height="30" fill="rgba(251,191,36,0.3)" stroke="#fbbf24"/><text x="104" y="20" text-anchor="middle" font-size="11" fill="white">1024</text>
+    <rect x="126" y="0" width="40" height="30" fill="rgba(251,191,36,0.3)" stroke="#fbbf24"/><text x="146" y="20" text-anchor="middle" font-size="11" fill="white">Q:</text>
+    <rect x="168" y="0" width="40" height="30" fill="rgba(251,191,36,0.3)" stroke="#fbbf24"/><text x="188" y="20" text-anchor="middle" font-size="11" fill="white">...</text>
+    <rect x="210" y="0" width="60" height="30" fill="rgba(251,191,36,0.3)" stroke="#fbbf24"/><text x="240" y="20" text-anchor="middle" font-size="11" fill="white">eot</text>
+    <rect x="275" y="0" width="40" height="30" fill="rgba(52,211,153,0.3)" stroke="#34d399"/><text x="295" y="20" text-anchor="middle" font-size="11" fill="white">\box</text>
+    <rect x="317" y="0" width="40" height="30" fill="rgba(52,211,153,0.3)" stroke="#34d399"/><text x="337" y="20" text-anchor="middle" font-size="11" fill="white">{</text>
+    <rect x="359" y="0" width="40" height="30" fill="rgba(52,211,153,0.3)" stroke="#34d399"/><text x="379" y="20" text-anchor="middle" font-size="11" fill="white">B</text>
+    <rect x="401" y="0" width="40" height="30" fill="rgba(52,211,153,0.3)" stroke="#34d399"/><text x="421" y="20" text-anchor="middle" font-size="11" fill="white">}</text>
+  </g>
+
+  <!-- target_tokens = all[1:] -->
+  <text x="30" y="188" fill="white" font-size="12" font-weight="700">target_tokens (int64, all[1:])</text>
+  <g transform="translate(30, 200)">
+    <rect x="0" y="0" width="40" height="30" fill="rgba(251,191,36,0.15)" stroke="#fbbf24" stroke-dasharray="3,2"/><text x="20" y="20" text-anchor="middle" font-size="11" fill="#94a3b8">256</text>
+    <rect x="42" y="0" width="40" height="30" fill="rgba(251,191,36,0.15)" stroke="#fbbf24" stroke-dasharray="3,2"/><text x="62" y="20" text-anchor="middle" font-size="11" fill="#94a3b8">1024</text>
+    <rect x="84" y="0" width="40" height="30" fill="rgba(251,191,36,0.15)" stroke="#fbbf24" stroke-dasharray="3,2"/><text x="104" y="20" text-anchor="middle" font-size="11" fill="#94a3b8">Q:</text>
+    <rect x="126" y="0" width="40" height="30" fill="rgba(251,191,36,0.15)" stroke="#fbbf24" stroke-dasharray="3,2"/><text x="146" y="20" text-anchor="middle" font-size="11" fill="#94a3b8">...</text>
+    <rect x="168" y="0" width="60" height="30" fill="rgba(251,191,36,0.15)" stroke="#fbbf24" stroke-dasharray="3,2"/><text x="198" y="20" text-anchor="middle" font-size="11" fill="#94a3b8">eot</text>
+    <rect x="233" y="0" width="40" height="30" fill="rgba(52,211,153,0.3)" stroke="#34d399"/><text x="253" y="20" text-anchor="middle" font-size="11" fill="white">\box</text>
+    <rect x="275" y="0" width="40" height="30" fill="rgba(52,211,153,0.3)" stroke="#34d399"/><text x="295" y="20" text-anchor="middle" font-size="11" fill="white">{</text>
+    <rect x="317" y="0" width="40" height="30" fill="rgba(52,211,153,0.3)" stroke="#34d399"/><text x="337" y="20" text-anchor="middle" font-size="11" fill="white">B</text>
+    <rect x="359" y="0" width="40" height="30" fill="rgba(52,211,153,0.3)" stroke="#34d399"/><text x="379" y="20" text-anchor="middle" font-size="11" fill="white">}</text>
+    <rect x="401" y="0" width="40" height="30" fill="rgba(52,211,153,0.3)" stroke="#34d399"/><text x="421" y="20" text-anchor="middle" font-size="11" fill="white">eot</text>
+  </g>
+
+  <!-- advantages -->
+  <text x="30" y="258" fill="white" font-size="12" font-weight="700">advantages (float32) — zero on prompt, adv on response</text>
+  <g transform="translate(30, 270)">
+    <rect x="0" y="0" width="40" height="30" fill="rgba(100,116,139,0.3)" stroke="#64748b"/><text x="20" y="20" text-anchor="middle" font-size="11" fill="white">0.0</text>
+    <rect x="42" y="0" width="40" height="30" fill="rgba(100,116,139,0.3)" stroke="#64748b"/><text x="62" y="20" text-anchor="middle" font-size="11" fill="white">0.0</text>
+    <rect x="84" y="0" width="40" height="30" fill="rgba(100,116,139,0.3)" stroke="#64748b"/><text x="104" y="20" text-anchor="middle" font-size="11" fill="white">0.0</text>
+    <rect x="126" y="0" width="40" height="30" fill="rgba(100,116,139,0.3)" stroke="#64748b"/><text x="146" y="20" text-anchor="middle" font-size="11" fill="white">0.0</text>
+    <rect x="168" y="0" width="60" height="30" fill="rgba(100,116,139,0.3)" stroke="#64748b"/><text x="198" y="20" text-anchor="middle" font-size="11" fill="white">0.0</text>
+    <rect x="233" y="0" width="40" height="30" fill="rgba(52,211,153,0.5)" stroke="#34d399"/><text x="253" y="20" text-anchor="middle" font-size="11" fill="white">+0.5</text>
+    <rect x="275" y="0" width="40" height="30" fill="rgba(52,211,153,0.5)" stroke="#34d399"/><text x="295" y="20" text-anchor="middle" font-size="11" fill="white">+0.5</text>
+    <rect x="317" y="0" width="40" height="30" fill="rgba(52,211,153,0.5)" stroke="#34d399"/><text x="337" y="20" text-anchor="middle" font-size="11" fill="white">+0.5</text>
+    <rect x="359" y="0" width="40" height="30" fill="rgba(52,211,153,0.5)" stroke="#34d399"/><text x="379" y="20" text-anchor="middle" font-size="11" fill="white">+0.5</text>
+    <rect x="401" y="0" width="40" height="30" fill="rgba(52,211,153,0.5)" stroke="#34d399"/><text x="421" y="20" text-anchor="middle" font-size="11" fill="white">+0.5</text>
+  </g>
+
+  <!-- Explanation column (right) -->
+  <g transform="translate(500, 30)">
+    <rect x="0" y="0" width="970" height="300" rx="8" fill="rgba(15,23,42,0.85)" stroke="#22d3ee" stroke-width="1"/>
+    <text x="20" y="25" fill="#22d3ee" font-size="13" font-weight="700">Three invariants we had to get EXACTLY right</text>
+
+    <text x="20" y="55" fill="white" font-size="11" font-weight="600">1. Shift by one (next-token prediction)</text>
+    <text x="35" y="72" fill="#94a3b8" font-size="10">input_tokens = all[:-1]   → goes into ModelInput.from_ints</text>
+    <text x="35" y="87" fill="#94a3b8" font-size="10">target_tokens = all[1:]   → when predicting position i, we're predicting token i+1</text>
+
+    <text x="20" y="115" fill="white" font-size="11" font-weight="600">2. Mask the prompt — advantage = 0 on prompt positions</text>
+    <text x="35" y="132" fill="#94a3b8" font-size="10">If a target position predicts a PROMPT token → we don't want to train on it</text>
+    <text x="35" y="147" fill="#94a3b8" font-size="10">(the model didn't write that token; user did). Set advantage = 0.0.</text>
+
+    <text x="20" y="175" fill="white" font-size="11" font-weight="600">3. Sentinel prompt logprobs — logprob = 1.0 on prompt positions</text>
+    <text x="35" y="192" fill="#94a3b8" font-size="10">We didn't observe logprobs for prompt (model didn't generate it). Use 1.0 sentinel.</text>
+    <text x="35" y="207" fill="#94a3b8" font-size="10">Safe because advantage=0 there → importance ratio doesn't contribute to loss.</text>
+    <text x="35" y="222" fill="#fb7185" font-size="10" font-weight="600">This was the riskiest part. 16 unit tests cover it.</text>
+
+    <text x="20" y="252" fill="#22d3ee" font-size="11" font-weight="600">Result: tinker.Datum that Tinker server accepts + trains on correctly.</text>
+    <text x="20" y="270" fill="#94a3b8" font-size="9">Dtypes: target_tokens=int64, advantages=float32, logprobs=float32 (enforced by TensorData).</text>
+  </g>
+</svg>
+</div>
+
+<!-- ========== SESSION JOURNEY ========== -->
+<h2>④ The whole session journey (what we did this session)</h2>
+<div class="panel">
+<svg viewBox="0 0 1500 180" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <pattern id="grid4" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+    <marker id="a4" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+    </marker>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#grid4)"/>
+
+  <line x1="50" y1="90" x2="1450" y2="90" stroke="#475569" stroke-width="1.5"/>
+
+  <!-- stages -->
+  <g>
+    <rect x="50" y="62" width="160" height="56" rx="8" fill="rgba(52,211,153,0.2)" stroke="#34d399" stroke-width="1.5"/>
+    <text x="130" y="82" text-anchor="middle" font-size="11" fill="white" font-weight="700">3 parallel scans</text>
+    <text x="130" y="98" text-anchor="middle" font-size="9" fill="#94a3b8">nemo-gym, tinker,</text>
+    <text x="130" y="110" text-anchor="middle" font-size="9" fill="#94a3b8">tinker-atropos</text>
+  </g>
+  <line x1="210" y1="90" x2="255" y2="90" stroke="#64748b" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <g>
+    <rect x="260" y="62" width="160" height="56" rx="8" fill="rgba(34,211,238,0.2)" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="340" y="82" text-anchor="middle" font-size="11" fill="white" font-weight="700">4 waves build</text>
+    <text x="340" y="98" text-anchor="middle" font-size="9" fill="#94a3b8">config → datum →</text>
+    <text x="340" y="110" text-anchor="middle" font-size="9" fill="#94a3b8">shim → trainer → smoke</text>
+  </g>
+  <line x1="420" y1="90" x2="465" y2="90" stroke="#64748b" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <g>
+    <rect x="470" y="62" width="160" height="56" rx="8" fill="rgba(251,146,60,0.2)" stroke="#fb923c" stroke-width="1.5"/>
+    <text x="550" y="82" text-anchor="middle" font-size="11" fill="white" font-weight="700">Offline e2e</text>
+    <text x="550" y="98" text-anchor="middle" font-size="9" fill="#94a3b8">fake Tinker SDK</text>
+    <text x="550" y="110" text-anchor="middle" font-size="9" fill="#94a3b8">156 tests, 4 bugs fixed</text>
+  </g>
+  <line x1="630" y1="90" x2="675" y2="90" stroke="#64748b" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <g>
+    <rect x="680" y="62" width="160" height="56" rx="8" fill="rgba(251,191,36,0.2)" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="760" y="82" text-anchor="middle" font-size="11" fill="white" font-weight="700">7 code reviews</text>
+    <text x="760" y="98" text-anchor="middle" font-size="9" fill="#94a3b8">Tinker/NemoGym/Atropos</text>
+    <text x="760" y="110" text-anchor="middle" font-size="9" fill="#94a3b8">+ FAANG/lib/SRE</text>
+  </g>
+  <line x1="840" y1="90" x2="885" y2="90" stroke="#64748b" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <g>
+    <rect x="890" y="62" width="160" height="56" rx="8" fill="rgba(167,139,250,0.2)" stroke="#a78bfa" stroke-width="1.5"/>
+    <text x="970" y="82" text-anchor="middle" font-size="11" fill="white" font-weight="700">Review fixes</text>
+    <text x="970" y="98" text-anchor="middle" font-size="9" fill="#94a3b8">errors.py, py.typed,</text>
+    <text x="970" y="110" text-anchor="middle" font-size="9" fill="#94a3b8">preflight, resume meta</text>
+  </g>
+  <line x1="1050" y1="90" x2="1095" y2="90" stroke="#64748b" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <g>
+    <rect x="1100" y="62" width="160" height="56" rx="8" fill="rgba(251,113,133,0.2)" stroke="#fb7185" stroke-width="2"/>
+    <text x="1180" y="82" text-anchor="middle" font-size="11" fill="white" font-weight="700">LIVE Tinker</text>
+    <text x="1180" y="98" text-anchor="middle" font-size="9" fill="#fb7185">3 bugs surfaced + fixed</text>
+    <text x="1180" y="110" text-anchor="middle" font-size="9" fill="#94a3b8">smoke + mcqa + resume</text>
+  </g>
+  <line x1="1260" y1="90" x2="1305" y2="90" stroke="#64748b" stroke-width="1.5" marker-end="url(#a4)"/>
+
+  <g>
+    <rect x="1310" y="62" width="140" height="56" rx="8" fill="rgba(52,211,153,0.4)" stroke="#34d399" stroke-width="2.5"/>
+    <text x="1380" y="82" text-anchor="middle" font-size="11" fill="white" font-weight="700">✓ DONE</text>
+    <text x="1380" y="98" text-anchor="middle" font-size="9" fill="#94a3b8">211 tests, 50+ commits</text>
+    <text x="1380" y="110" text-anchor="middle" font-size="9" fill="#34d399">on origin/main</text>
+  </g>
+
+  <!-- Top metadata -->
+  <text x="130" y="50" text-anchor="middle" font-size="9" fill="#64748b">Phase 0</text>
+  <text x="340" y="50" text-anchor="middle" font-size="9" fill="#64748b">Waves 1-4</text>
+  <text x="550" y="50" text-anchor="middle" font-size="9" fill="#64748b">Offline validation</text>
+  <text x="760" y="50" text-anchor="middle" font-size="9" fill="#64748b">Review 01-07</text>
+  <text x="970" y="50" text-anchor="middle" font-size="9" fill="#64748b">15 PRs landed</text>
+  <text x="1180" y="50" text-anchor="middle" font-size="9" fill="#64748b">Real API key</text>
+  <text x="1380" y="50" text-anchor="middle" font-size="9" fill="#64748b">Production ready</text>
+
+  <!-- Bottom counts -->
+  <text x="130" y="148" text-anchor="middle" font-size="9" fill="#475569">2,069 lines analysis</text>
+  <text x="340" y="148" text-anchor="middle" font-size="9" fill="#475569">~2,500 LoC shipped</text>
+  <text x="550" y="148" text-anchor="middle" font-size="9" fill="#475569">e2e_fake.sh green</text>
+  <text x="760" y="148" text-anchor="middle" font-size="9" fill="#475569">3,410 lines review</text>
+  <text x="970" y="148" text-anchor="middle" font-size="9" fill="#475569">ruff + mypy clean</text>
+  <text x="1180" y="148" text-anchor="middle" font-size="9" fill="#475569">Llama-3.1-8B-Instruct</text>
+  <text x="1380" y="148" text-anchor="middle" font-size="9" fill="#475569">github.com/NousResearch/tinker-nemogym</text>
+</svg>
+</div>
+
+<p class="footer">tinker-nemogym • MCQA live-run postmortem • 2026-04-22 • generated from /tmp/live_run_mcqa.log + /tmp/live_run_mcqa_wandb.log</p>
+
+</div>
+</body>
+</html>

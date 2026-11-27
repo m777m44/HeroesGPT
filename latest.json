@@ -1,7 +1,7 @@
 {
-  "versionCode": 19,
-  "versionName": "6.7",
+  "versionCode": 20,
+  "versionName": "6.8",
   "apk": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT.apk",
-  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v6.7.apk",
-  "notes": "v6.7 — إصلاح التثبيت ✅: توقيع ثابت دائم للتطبيق (لم يعد يتغير بين الإصدارات). ملاحظة مهمة: لأن التوقيع تغيّر مرة أخيرة، احذف نسخة HeroesGPT القديمة من هاتفك أولًا ثم ثبّت هذه النسخة — وبعدها كل التحديثات القادمة ستُثبّت مباشرة دون حذف. كل مميزات v6.6 (الخزنة المشفرة) وتصميم الشيطان الظل والمكتبة الضخمة موجودة."
+  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v6.8.apk",
+  "notes": "v6.8 — الدمج الشامل الكامل: الآن 77 مشروعًا من NousResearch (كل المستودعات غير المتفرعة — 51 مستودعًا جديدًا: كل إضافات hermes-plugin وhermes-foundry وllm-chain وlm-eval-harness وhuskyholdem-bench وObsidian وnomos وغيرها) + إصلاح جذري لانهيار مكتبة الأبطال (ArrayIndexOutOfBounds عند فتح مشروع). 22,877 ملفًا معرفيًا (171 ميجابايت) داخل التطبيق. مثبت على النسخة السابقة مباشرة دون حذف."
 }

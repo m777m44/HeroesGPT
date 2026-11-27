@@ -1,0 +1,44 @@
+# Build staging directories created by build.sh. Leading slashes prevent these rules from matching
+# the committed source directories under src/.
+/edge/
+/gateway/
+/sidecar/
+
+# .NET build output
+**/bin/
+**/obj/
+src/edge/publish/
+src/edge/.vs/
+
+# Local OS and editor state
+.DS_Store
+.idea/
+.vscode/
+__pycache__/
+*.py[cod]
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+/.private/
+*.key
+*.pem
+*.p12
+*.pfx
+*.cer
+*.crt
+*.jks
+*.keystore
+secrets/
+
+# Private working material is never part of the distributable repository.
+/docs/AGENT_IDENTITY_AND_FOUNDRY_CHALLENGES.md
+
+# Azure CLI and deployment output
+.azure/
+deployment-output/
+*.deployment.json
+
+# Optional per-installation coordinates used by build.sh and new-version.sh.
+.deployment.local

@@ -1,0 +1,57 @@
+# tinker-nemogym live-run config that exercises the full diagnostic suite
+# (β precision-gap, sampler-version staleness, per-rollout latency). Inherits
+# the mcqa dataset so we get varied-reward groups, then flips
+# `measure_precision_gap` on so each step logs `beta_*` metrics alongside
+# loss / reward / staleness / latency aggregates.
+#
+# This is the canonical "what does training hygiene look like on Tinker"
+# config — use it as a template when diagnosing a new base model or loss fn.
+#
+# Run via:
+#     bash scripts/smoke_diagnostics.sh
+#
+# See:
+# - docs/diagnostics.md for what each metric means + how to interpret β
+# - https://huggingface.co/spaces/aminediroHF/trainer-generator-bf16-mismatch
+
+schema_version: 1
+
+tinker:
+  base_model: meta-llama/Llama-3.1-8B-Instruct
+  lora_rank: 32
+  learning_rate: 5.0e-4
+  adam_beta1: 0.9
+  adam_beta2: 0.95
+  adam_eps: 1.0e-12
+  loss_fn: importance_sampling
+  # wandb_project: tinker-nemogym-diagnostics   # uncomment to ship to wandb
+  wandb_project: null
+  wandb_name: null
+  checkpoint_dir: ./checkpoints/smoke_diagnostics
+  resume_from_checkpoint: null
+
+model_server:
+  host: 127.0.0.1
+  port: 8001
+  stop_tokens: []
+
+nemogym:
+  # Dynamic agent discovery via HeadServer; nemo-gym picks a random port.
+  agent_url: null
+  head_url: http://127.0.0.1:11000
+  dataset_jsonl: tinker_nemogym/environments/mcqa/dataset.jsonl
+  group_size: 8
+  ng_run_yamls: []
+
+training:
+  n_steps: 5
+  batch_size: 2
+  max_tokens: 256
+  temperature: 1.0
+  save_every: 2
+  eval_every: 100
+  drop_constant_reward: true
+  # ↓ the one line that turns on the HuggingFace BF16-style diagnostic.
+  # Costs ~1 extra forward_async call per step (no backward) so throughput
+  # roughly halves — intended for audits, not production runs.
+  measure_precision_gap: true

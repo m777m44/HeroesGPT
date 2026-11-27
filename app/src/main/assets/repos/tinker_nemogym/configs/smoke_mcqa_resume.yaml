@@ -1,0 +1,48 @@
+# Resume test: load state from a prior smoke_mcqa run and run 2 more steps.
+# The ``resume_from_checkpoint`` value below is an example — each live run
+# produces a new tinker:// URI (the run_id is session-specific). Before
+# running this config, grep your previous ``/tmp/live_run_mcqa.log`` for the
+# line ``Checkpoint saved: ... uri=tinker://...`` and paste it here.
+
+schema_version: 1
+
+tinker:
+  base_model: meta-llama/Llama-3.1-8B-Instruct
+  lora_rank: 32
+  learning_rate: 5.0e-4
+  adam_beta1: 0.9
+  adam_beta2: 0.95
+  adam_eps: 1.0e-12
+  loss_fn: importance_sampling
+  wandb_project: null
+  wandb_name: null
+  checkpoint_dir: ./checkpoints/smoke_mcqa_resume
+  # Captured from /tmp/live_run_mcqa.log of a prior run. New run_id each
+  # session — update before re-running. The SMOKE_RESUME_URI env var
+  # injected by scripts/smoke_mcqa_resume.sh overrides this at launch time
+  # (see that script for details).
+  resume_from_checkpoint: tinker://a2bfc5f6-b6aa-54ac-a211-44b3bc0fb530:train:0/weights/smoke_mcqa-step-4
+
+model_server:
+  host: 127.0.0.1
+  port: 8001
+  stop_tokens: []
+
+nemogym:
+  agent_url: null
+  head_url: http://127.0.0.1:11000
+  dataset_jsonl: tinker_nemogym/environments/mcqa/dataset.jsonl
+  group_size: 8
+  ng_run_yamls: []
+
+training:
+  n_steps: 2
+  batch_size: 2
+  max_tokens: 256
+  temperature: 1.0
+  save_every: 2
+  eval_every: 100
+  drop_constant_reward: true
+  # Precision-gap (β) diagnostic. See configs/smoke_diagnostics.yaml
+  # + docs/diagnostics.md. Off by default; flip on when auditing a model.
+  measure_precision_gap: false

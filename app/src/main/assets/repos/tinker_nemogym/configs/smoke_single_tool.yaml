@@ -1,0 +1,56 @@
+# Top-level tinker-nemogym smoke-test config for nemo-gym's
+# example_single_tool_call environment. Paths are relative to the
+# tinker-nemogym repo root (i.e. the directory this file lives under).
+#
+# Run via:
+#     poetry run python launch_training.py --config configs/smoke_single_tool.yaml
+# or:
+#     bash scripts/smoke_single_tool.sh  (which also launches nemo-gym)
+
+schema_version: 1
+
+tinker:
+  base_model: meta-llama/Llama-3.1-8B-Instruct
+  lora_rank: 32
+  learning_rate: 5.0e-4
+  adam_beta1: 0.9
+  adam_beta2: 0.95
+  adam_eps: 1.0e-12
+  loss_fn: importance_sampling
+  wandb_project: null
+  wandb_name: null
+  checkpoint_dir: ./checkpoints/smoke_single_tool
+
+model_server:
+  host: 127.0.0.1
+  port: 8001
+  stop_tokens: []
+
+nemogym:
+  # Leave agent_url null so the trainer discovers the agent port dynamically
+  # via the HeadServer's /server_instances endpoint. nemo-gym allocates agent
+  # ports randomly from 10001-20000, so a hardcoded port races with whatever
+  # the scheduler picked. See tinker_nemogym/utils/process.py::discover_agent_url.
+  agent_url: null
+  head_url: http://127.0.0.1:11000
+  dataset_jsonl: tinker_nemogym/environments/single_tool_call/dataset.jsonl
+  group_size: 2
+  # Empty — smoke_single_tool.sh launches ng_run externally. If non-empty the
+  # trainer would spawn ng_run itself (not implemented in the MVP).
+  ng_run_yamls: []
+
+training:
+  n_steps: 2
+  batch_size: 2
+  max_tokens: 256
+  temperature: 1.0
+  save_every: 2
+  eval_every: 100
+  # get_weather env always returns reward=1.0 → constant-reward groups.
+  # Normally we skip these (no useful gradient). For smoke-testing the Tinker
+  # forward_backward wire path end-to-end, force the training call even when
+  # advantages are all 0 — the gradient is a no-op but we prove the plumbing.
+  drop_constant_reward: false
+  # Precision-gap (β) diagnostic. See configs/smoke_diagnostics.yaml
+  # + docs/diagnostics.md. Off by default; flip on when auditing a model.
+  measure_precision_gap: false

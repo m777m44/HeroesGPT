@@ -1,0 +1,16 @@
+# nemo-gym resources_server config for our `tng_json_format` benchmark.
+#
+# The resources_server code is embedded inside this repo at:
+#   tinker_nemogym/environments/json_format/nemogym_server/app.py
+#
+# scripts/smoke_json_format.sh symlinks that dir's contents into
+# `nemo-gym/resources_servers/tng_json_format/` at run time so ng_run
+# discovers it under its standard `{server_type}/{name}` convention.
+# The symlink is removed on exit. No sibling-repo edits required.
+tng_json_format:
+  resources_servers:
+    tng_json_format:
+      entrypoint: app.py
+      domain: instruction_following
+      verified: false
+      description: Grade JSON-output compliance — valid JSON + required keys

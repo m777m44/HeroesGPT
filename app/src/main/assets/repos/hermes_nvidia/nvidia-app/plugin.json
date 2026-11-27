@@ -1,0 +1,44 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "nvidia-app",
+  "version": "0.1.0",
+  "description": "MCP server and skill for NVIDIA App on Windows; tools appear while the app is installed and running.",
+  "author": {
+    "name": "Nous Research"
+  },
+  "repository": "https://github.com/NousResearch/hermes-nvidia",
+  "license": "MIT",
+  "keywords": [
+    "nvidia",
+    "mcp",
+    "windows",
+    "gpu",
+    "overlay"
+  ],
+  "extensions": {
+    "com.nousresearch.hermes": {
+      "servers": {
+        "nvidia-app": {
+          "app": {
+            "win32": {
+              "presence": "executable",
+              "location": "%ProgramFiles%/NVIDIA Corporation/NVIDIA App/McpServer/NvAppMcpServer.exe",
+              "version": {
+                "kind": "uninstall_registry",
+                "display_name_prefix": "NVIDIA App"
+              }
+            }
+          },
+          "requires": {
+            "app": true,
+            "min_version": "11.0.0"
+          },
+          "liveness": {
+            "kind": "server_json",
+            "path": "%LOCALAPPDATA%/NVIDIA Corporation/NVIDIA App/McpServer/server.json"
+          }
+        }
+      }
+    }
+  }
+}

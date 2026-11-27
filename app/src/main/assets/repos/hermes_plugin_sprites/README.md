@@ -1,0 +1,298 @@
+# hermes-plugin-sprites
+
+Sprites terminal backend for [Hermes Agent](https://github.com/NousResearch/hermes-agent) — run agent shell commands in [Sprites](https://sprites.dev), stateful cloud sandboxes on Fly.io with checkpoint & restore.
+
+Built on the pluggable terminal-backend extension point (hermes-agent PR #94400): this plugin registers `terminal.backend: sprites` as a first-class backend across dispatch, the setup wizard, `hermes status` / `hermes doctor`, the dashboard picker, approval policy, path handling, and subprocess secret stripping — with zero changes to hermes-agent core.
+
+## Install
+
+```bash
+# 1. Copy/clone this repo into the Hermes plugins dir
+git clone git@github.com:NousResearch/hermes-plugin-sprites.git ~/.hermes/plugins/sprites
+
+# 2. Install the SDK using Hermes's Python environment, not an unrelated Python
+pip install 'sprites-py>=0.5.1,<0.6'
+
+# 3. Enable + select
+hermes plugins enable sprites
+hermes config set terminal.backend sprites
+
+# 4. Create a token in your organization's Sprites settings in the Fly.io
+#    dashboard, then save SPRITES_TOKEN=... in ~/.hermes/.env using your editor.
+#    `sprite login` alone does not supply the token to Hermes.
+chmod 600 ~/.hermes/.env
+```
+
+`hermes doctor` checks token/SDK availability, not command execution. Compatibility
+is tested against Hermes `v2026.8.31`, `v2026.9.7` and `v0.21.7` using real plugin
+discovery and terminal dispatch with mocked SDK transport.
+
+## Behavior
+
+- **Persistent by default.** Each Sprite outlives the session and is resumed via a deterministic, profile-scoped name (`hermes-{task}` on the default profile, `hermes-{display}-{digest12}` on named profiles). Its ext4 filesystem is the authoritative store — no sync-back.
+- **Profile isolation is fail-closed.** Identity digests are collision-resistant across component boundaries and DNS-bounded; profile-resolution failure refuses to fall back to the default profile's Sprite.
+- **Ephemeral mode** (`terminal.container_persistent: false`): run-unique Sprite names (never adopted, deleted on cleanup), with per-session sandbox identities so two ephemeral runs can never attach the same live VM.
+- **Timeouts and interrupts stop the command on the Sprite.** Closing an exec's connection leaves the command running there, so each command carries a unique `HERMES_SPRITES_EXEC` environment marker. When a command hits its timeout, is interrupted (`/stop`) or is killed, a second exec sends SIGTERM to every process carrying the marker, including children that `setsid` or background themselves, and SIGKILL after 2 s. The kill returns only after that stop finishes, so Hermes reports the timeout once the processes are gone; a stop that cannot confirm it is logged as a warning (and, when the plugin's own client wait expired, reported as "may still be running" instead of 124). The marker is kept out of the shell snapshot, so every command's children carry that command's own marker. The stop leaves a flag file first, so a command whose exec had not started yet when it was stopped (an immediate `/stop`) exits 130 instead of running; a connection lost mid-command also triggers a stop. A process that drops its environment (`env -i`, `sudo`) is not found. A background job (`nohup … &`) whose launching command already returned keeps running. Commands without a positive timeout get 3600 s.
+- **stdin travels as the exec's stdin stream**, not inside the command. Sprites refuses an exec argument over 8192 bytes, so a command longer than that fails with a message saying so, while `write_file` / `patch` content of any size goes through.
+- **Sharing model:** gateway/WebUI sessions each get their own Sprite; `delegate_task` children share their parent's; key-less flows (CLI, cron) share the profile-default Sprite.
+- `SPRITES_TOKEN` / `SPRITE_TOKEN` (and `SPRITES_TOKEN_FILE`) are stripped from every subprocess the agent spawns.
+
+## Token from a file (`SPRITES_TOKEN_FILE`)
+
+Set `SPRITES_TOKEN_FILE` to the path of a file holding the token and the plugin
+reads the token from there instead of `SPRITES_TOKEN`:
+
+- The file holds the token alone (printable ASCII, no spaces), optionally
+  followed by one newline. It must be a regular file of at most 8 KiB; a
+  FIFO, device or directory is refused without blocking.
+- The file is read again whenever a Sprites environment is created, and after
+  an HTTP 401 from the Sprites API (any call: get, create, exec, file upload,
+  cleanup delete): if the token in the file changed, the failed call is
+  retried once with a new client. A 401 means the request was refused before
+  it ran, so the retry never runs a command twice. A token rewritten in place
+  (Hermes Cloud renews its short-lived per-instance token weekly) therefore
+  takes effect without restarting Hermes.
+- While `SPRITES_TOKEN_FILE` is set (even to an empty value), only the file
+  counts: a missing, unreadable, empty or malformed file is an error that
+  names `SPRITES_TOKEN_FILE`, and `SPRITES_TOKEN` is **not** used as a
+  fallback, because a leftover env token may be a broader legacy token. The
+  file path is fixed when an environment is created (in that profile's secret
+  scope); a retry re-reads the same file and never switches credentials.
+- `SPRITES_TOKEN_FILE` must be an absolute path with no symlinks anywhere in
+  it (every component, the file included, is checked with `lstat`) and no
+  `.`, `..` or repeated `/`. Anything else is refused (the backend reports
+  `needs_setup`, and the error names the path, never the contents). The check
+  runs when an environment is created and again before every re-read.
+- **The token file's directory must be dedicated to the token** (Hermes Cloud
+  uses `/opt/data/secrets/`, a `0700` directory holding only the token and its
+  writer's temp files). File sync never uploads a file whose real path is
+  inside that directory, so the current token, a renewed one and a
+  half-written temp file never reach the Sprite. A file wrongly kept there
+  (for example a registered credential file) is skipped too, and each skipped
+  path is logged once as a warning (path only). Nothing outside the directory
+  is affected.
+- Out of scope: upload roots or credential files that an operator points into
+  the token directory, and hard links or copies of the token elsewhere. The
+  token Hermes Cloud writes only grants the instance's own Sprites (its own
+  name prefix) for at most 14 days, and the Sprite it would reach is that same
+  instance's sandbox, so such a misconfiguration is a bounded exposure; the
+  plugin does not try to detect it.
+- Error messages name the path, never the file's contents. An API error that
+  quotes the token is replaced by one that does not.
+- Replace the file atomically (write a temp file in the same directory, then
+  rename it over the old one) so the plugin never reads a half-written token.
+  Keep it mode `0600`, owned by the user Hermes runs as.
+- Unset, `SPRITES_TOKEN` / `SPRITE_TOKEN` work as before (a value with control
+  characters, which no HTTP header can carry, is refused). Without a token
+  file a 401 is not retried: an env token cannot change under a running
+  process.
+
+## Settings
+
+Optional settings live in the plugin's own namespace in `config.yaml`,
+`plugins.entries.sprites.settings` (they also appear in the Plugins hub). With
+none set, behaviour, Sprite names and API requests are exactly as described
+above.
+
+| Key | Values | Effect |
+|---|---|---|
+| `name_prefix` | lowercase letters, digits and single hyphens; max 40 chars | Every Sprite name starts with `<prefix>-` instead of `hermes-`: `<prefix>-{task}` on the default profile, `<prefix>-{display}-{digest12}` on named profiles, `<prefix>-eph-{task}-{nonce}` for ephemeral runs. The prefix is never truncated, and the plugin refuses to create or resume any Sprite outside it. |
+| `image` | OCI reference with an explicit tag (not `latest`) or a digest | Image for Sprites this plugin creates. Prefer a digest pin (`name@sha256:...`) so every new Sprite gets the same bytes. Unset: the Sprites base image (Ubuntu, `sprite` user, sudo). |
+| `max_cpus` | 1 to 128 | vCPUs for newly created Sprites. Unset: Sprites default. |
+| `max_ram_gb` | 1 to 1024 | Memory (GB) for newly created Sprites. Unset: Sprites default. |
+| `max_disk_gb` | 1 to 1024, no smaller than the image | Root filesystem (GB) for newly created Sprites. Unset: Sprites default. |
+| `scope` | `session` (default) \| `instance` | `instance` makes every task id on a profile (gateway sessions, cron jobs, `delegate_task` children, CLI) resume the same persistent Sprite: `<prefix>-default` (or `hermes-default` without a prefix) on the default profile, the usual digest-scoped `-default` name on a named profile. Each session still gets its own shell; they share the VM and filesystem (file sync into the Sprite is serialised across sessions in one process). |
+
+An invalid value for either key is an error, not a fallback: the backend
+refuses to start and `hermes doctor` shows the reason on its "Sprites naming"
+row. The same happens when config.yaml itself cannot be parsed, because Hermes
+then runs on a fallback copy of the config that may not contain the settings
+you just wrote. Ignoring a bad prefix would create Sprites outside the namespace you meant
+to confine this install to; ignoring a misspelt scope would quietly start
+creating one Sprite per session.
+
+`image`, `max_cpus`, `max_ram_gb` and `max_disk_gb` apply only when the plugin
+creates a Sprite. An existing Sprite is resumed as it is; the plugin never
+updates its config (on Sprites 2.0 the image and disk size are fixed at
+creation). To move to a new image or size, delete the Sprite (or change
+`name_prefix`) so the next session creates a fresh one. Creating from an image
+Sprites has not pulled before can take a minute or more; the plugin waits up to
+4 minutes (inside Hermes's 420 s terminal tool deadline). If the create is still
+running then, the command fails with a "still being created; retry" error. In
+persistent mode the next command picks up the Sprite once it exists; in ephemeral
+mode the plugin logs the possibly orphaned Sprite's name for manual cleanup. Most non-base images run commands as root, and some
+leave `$HOME` unset: the plugin then uses `/root` as the home directory and
+passes `HOME=/root` to its commands.
+
+```bash
+hermes config set plugins.entries.sprites.settings.image 'nousresearch/hermes-sandbox@sha256:<digest>'
+hermes config set plugins.entries.sprites.settings.max_cpus 2
+hermes config set plugins.entries.sprites.settings.max_ram_gb 4
+hermes config set plugins.entries.sprites.settings.max_disk_gb 20
+```
+
+`scope` only affects persistent Sprites. Ephemeral mode
+(`terminal.container_persistent: false`) keeps its run-unique names under either
+scope, so two runs never share a VM.
+
+### One Sprite per hosted instance
+
+When several Hermes installs share one Sprites organization (for example one
+hosted instance per customer), give each install its own prefix and the
+`instance` scope, so each install owns exactly one Sprite and can never resume
+another install's:
+
+```bash
+hermes config set plugins.entries.sprites.settings.name_prefix hc-<instance-id>
+hermes config set plugins.entries.sprites.settings.scope instance
+```
+
+That install's only Sprite is then `hc-<instance-id>-default`, so its
+lifecycle (resume after a restart, delete when the instance is deleted) is one
+deterministic name. Notes:
+
+- Use a prefix like `hc-<id>`. `hermes config set` parses YAML scalars, so
+  values such as `123`, `1e3`, `true` or `off` are stored as numbers/booleans
+  (the plugin rejects them), and `null` / `none` clear the setting (the
+  default `hermes-*` names come back).
+- A prefix is a plain string prefix, so in `session` scope install `hc-a` can
+  produce a name inside another install's `hc-a-b-` namespace (task id
+  `b-...`). Use fixed-length ids, or `instance` scope (whose only name is
+  `<prefix>-default`), to keep installs disjoint.
+- The prefix confines what this plugin does; it is not an access control. The
+  `SPRITES_TOKEN` on the machine decides what the machine can reach, so scope
+  the token to the same prefix where Sprites lets you.
+- Changing either setting changes which Sprite is resumed. The previous
+  Sprite is not deleted; remove it with the Sprites CLI or API if you no longer
+  need its files.
+
+## Sprites 2.0 runtime
+
+Sprites now run on the 2.0 runtime, behind the same `https://api.sprites.dev/v1`
+paths. Of the filesystem API it keeps only `fs/write`, which creates missing
+parent directories itself. The plugin's file sync (skills, credential files and
+caches copied into `~/.hermes` on the Sprite before each command) therefore:
+
+- uploads changed files as a tar archive: one `fs/write` of the archive
+  (root-only, mode 0600) into `~/.hermes/.sync-staging` on the Sprite and one
+  exec that unpacks it at `/` (retried with `sudo -n`) and removes it. Files
+  land with mode `0644`, as a single `fs/write` sets. If the unpack fails (no
+  `tar`, a non-root user without working sudo), that batch is sent one
+  `fs/write` per file; if the archive cannot be removed, it is emptied and the
+  session sends files one by one from then on (large files still in
+  chunks). Archives left by a sync whose unpack never ran are removed by a
+  later sync once idle for two hours.
+  Each `fs/write` and exec counts against the per-Sprite request rate limit
+  (300 per minute), and the skills tree alone is a few hundred files, so one
+  request per file left every sync cut off by HTTP 429 and resent in full.
+  No upload is larger than 4 MiB, tar headers included: the Sprites docs cap
+  one `fs/write` at 16 MiB (413 `file_too_large` above it), and in practice a
+  5 MiB write has come back 502 while 4.75 MiB and below succeed. More data
+  goes in more archives. A file too large for an archive of its own (an
+  image, an attachment, generated media) is sent in chunks of at most 4 MiB,
+  each one `fs/write` to a root-only numbered part file in a directory of its
+  own under `~/.hermes/.sync-staging`, then one exec (the same size whatever
+  the number of parts) checks that every part arrived, joins them into a temp
+  file in that directory and renames it into place with `mv -fT` (the API has
+  no append), retried with `sudo -n`, and removes the directory. A directory
+  at the destination is refused and left alone. A failed chunk or join fails
+  the sync, which is retried in full before the next command; an upload
+  directory left by a sync that never finished is removed, temp file and all,
+  once the directory has been idle for two hours (every part written
+  refreshes it). This is best-effort: an upload stalled for longer than that
+  can lose its directory, and its join then fails and the sync is retried;
+- deletes files that disappeared on the host with one exec per batch,
+  `rm -f -- <paths>`, retried as `sudo -n rm -f -- <paths>` because `fs/write`
+  creates root-owned files while the base image runs commands as `sprite`. A
+  missing file is fine; any other failure is retried on the next sync.
+
+## Bot Desktop, computer_use and the browser inside the Sprite
+
+The backend declares `supports_streams`, so Hermes runs the Bot Screen
+(Xvnc + Xfce), cua-driver (`computer_use`) and the bot's headed Chromium
+inside the Sprite instead of refusing them (`bot_desktop.placement: auto`).
+The Screen pane shows the Sprite's screen.
+
+- **Image.** The Sprite needs the desktop stack. Use
+  `nousresearch/hermes-sandbox:<version>-desktop`, pinned by digest, as the
+  `image` setting. Without it, Hermes names the missing binaries.
+- **Transport.** `SpritesEnvironment.exec_prefix()` gives Hermes a local
+  command: `sprite_stream.py`, running under Hermes's Python. It opens one
+  Sprites exec WebSocket (no TTY) per stream and passes bytes through
+  unchanged. It reads the token from a file whose path is on its command
+  line, never the token: `SPRITES_TOKEN_FILE` when set, else a private copy
+  of the token (a `0600` file in a `0700` directory under `$XDG_RUNTIME_DIR`,
+  `/dev/shm` or `/tmp`, never under `HERMES_HOME`, removed when Hermes
+  exits; a Hermes that is killed or crashes leaves it behind, in
+  `hermes-sprites-stream-*`). A file because Hermes starts cua-driver's stream with only `PATH`
+  in its environment.
+- **Desktop user.** Commands for the desktop user (`pn` in the sandbox image)
+  run through `sudo -n -H -u <user>`, so `$HOME` is that user's home. The
+  image needs `sudo` (the desktop sandbox image has it).
+- **Long commands.** A command whose encoded query would pass 6 KiB (Bot
+  Desktop's setup script carries its launcher and wallpaper) does not go in
+  the URL: a short `python3` bootstrap receives it as the first bytes on
+  stdin (with the `--env` pairs), restores the default SIGPIPE/SIGXFSZ
+  handling and execs it (exit 127
+  when the command does not exist).
+- **Exit status.** The remote command's status, or 255 when the stream itself
+  failed (no token, connection or handshake refused, an error frame, the
+  socket closed before an exit status), with the reason on stderr in one
+  line, as `ssh` does.
+- **No orphaned sessions.** A Sprites exec session keeps running after its
+  socket closes, and a running session keeps the Sprite awake. Hermes ends
+  streams with SIGKILL. A reaper process, started for each stream in its own
+  session before it connects, learns the session id as soon as Sprites sends
+  it and kills the session through the API (TERM, then KILL after 5 s) unless
+  the stream reported that its command finished. A stream killed in the
+  moment between the socket opening and the session id arriving cannot be
+  identified, so that session runs until its command ends. A dropped
+  connection ends the stream (no reconnect).
+- **Idle.** An open stream (a viewer watching the screen, a cua-driver
+  session, a DevTools connection) keeps the Sprite running. Hermes keeps a
+  session's cua-driver stream open until that session ends (cache eviction
+  does not close it), so after one `computer_use` call the Sprite stays
+  running, and billed, until the session is reset or Hermes stops. When nothing is
+  open, the Sprite stops after its idle timeout. A warm stop ends every
+  process, the screen included; the next screen, browser or `computer_use`
+  call starts it again (open tabs are lost; the browser profile on disk
+  stays). A Sprite set to suspend when idle (`auto_idle: "suspend"`, at most
+  16 GB of memory) keeps the screen and its windows through the pause.
+- **Limits.** Each probe and each stream is one exec start. Sprites allows
+  300 exec starts a minute and 32 running execs per Sprite.
+
+## Tests
+
+```bash
+# Unit (no token needed): use a Hermes checkout with its test dependencies installed.
+# Run from that checkout, substituting the absolute path to this plugin:
+cd /path/to/hermes-agent
+scripts/run_tests.sh /path/to/hermes-plugin-sprites/tests/test_sprites_environment.py \
+  /path/to/hermes-plugin-sprites/tests/test_sprite_stream.py
+```
+
+Through `scripts/run_tests.sh`, the tests import Hermes from the checkout you
+run them in (the runner clears the environment, so `HERMES_AGENT_REPO` does not
+reach them). When invoking pytest some other way, `HERMES_AGENT_REPO` selects
+the checkout if set; otherwise the current directory is used if it is a Hermes
+checkout, then `~/.hermes/hermes-agent`.
+Keep this plugin's clone outside the Hermes checkout and outside any other
+clone of this repo, or pytest also loads that other copy's `conftest.py`.
+
+`TestRealSdk401` checks 401 handling against the real sprites-py exception
+shapes and skips unless sprites-py (`>=0.5,<0.6`) is importable; the Hermes
+test environment does not include it. To run those too, invoke pytest with the
+test environment's interpreter and sprites-py on `PYTHONPATH`, with
+`HERMES_AGENT_REPO` set to the Hermes checkout.
+
+The legacy `tests/test_sprites_terminal_live.py` still assumes the pre-plugin
+Hermes layout and is not a supported standalone live-test recipe. Its rewrite
+is deferred; do not run it against your normal Hermes profile.
+
+## Attribution
+
+The Sprites environment was authored by **Kyle McLaren** ([@kylemclaren](https://github.com/kylemclaren), Fly.io) as hermes-agent [PR #30112](https://github.com/NousResearch/hermes-agent/pull/30112) and hardened through three rounds of review in [PR #93523](https://github.com/NousResearch/hermes-agent/pull/93523) (identity digests, DNS bounds, fail-closed profile resolution, race-safe first-use create, bounded deadlines, sandboxed live test suite). Extracted to this standalone plugin repo per the hermes-agent policy that third-party service integrations ship as plugins rather than core code.
+
+## License
+
+MIT

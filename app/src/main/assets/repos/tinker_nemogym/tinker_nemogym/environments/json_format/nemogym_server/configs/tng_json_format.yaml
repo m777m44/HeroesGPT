@@ -1,0 +1,7 @@
+tng_json_format:
+  resources_servers:
+    tng_json_format:
+      entrypoint: app.py
+      domain: instruction_following
+      verified: false
+      description: Grade JSON-output compliance — valid JSON + required keys

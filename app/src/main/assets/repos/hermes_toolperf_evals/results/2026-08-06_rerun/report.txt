@@ -1,0 +1,50 @@
+
+================ MODEL: anthropic/claude-sonnet-4.5 ================
+task                 | arm      |  n  ok%   llm  tool  errs  retr    kb   wall
+------------------------------------------------------------------------------
+err_python_env       | baseline |  3 100%   3.0   2.7   0.0   0.0     0    15s
+err_python_env       | fixes    |  3 100%   2.0   2.0   0.0   0.0     0    10s
+err_replay_patch     | baseline |  3 100%   3.0   2.0   0.0   0.0     0    14s
+err_replay_patch     | fixes    |  3 100%   3.0   2.0   0.0   0.0     0    14s
+err_ambiguous_edit   | baseline |  3 100%   4.0   3.0   0.0   0.0     1    19s
+err_ambiguous_edit   | fixes    |  3 100%   4.0   3.0   0.0   0.0     1    17s
+err_case_search      | baseline |  3 100%   2.3   1.3   0.0   0.0     0    13s
+err_case_search      | fixes    |  3  67%   2.0   1.0   0.0   0.0     0    16s
+err_hidden_search    | baseline |  3   0%   2.0   1.0   0.0   0.0     0    13s
+err_hidden_search    | fixes    |  3   0%   2.0   1.0   0.0   0.0     0    11s
+err_big_output       | baseline |  3 100%   3.0   2.0   0.0   0.0    49    16s
+err_big_output       | fixes    |  3 100%   3.0   2.0   0.0   0.0    49    15s
+err_multi_dir        | baseline |  3 100%   3.0   4.0   0.0   0.0     0    15s
+err_multi_dir        | fixes    |  3 100%   3.0   4.0   0.0   0.0     0    16s
+err_inline_script    | baseline |  3 100%   2.0   1.0   0.0   0.0     0    16s
+err_inline_script    | fixes    |  3 100%   2.3   1.3   0.3   0.3     0    72s
+err_big_file_read    | baseline |  3 100%   3.7   2.7   0.0   0.0   103    25s
+err_big_file_read    | fixes    |  3 100%   3.7   2.7   0.0   0.0   103    23s
+------------------------------------------------------------------------------
+TOTAL                | baseline | 27  89%   2.9   2.2   0.0   0.0    17    16s
+TOTAL                | fixes    | 27  85%   2.8   2.1   0.0   0.0    17    22s
+
+================ MODEL: qwen/qwen3-coder-30b-a3b-instruct ================
+task                 | arm      |  n  ok%   llm  tool  errs  retr    kb   wall
+------------------------------------------------------------------------------
+err_python_env       | baseline |  3 100%   5.7   4.7   0.7   0.7     1    22s
+err_python_env       | fixes    |  3 100%   4.3   3.3   0.7   0.7     0    20s
+err_replay_patch     | baseline |  3 100%   3.0   2.0   0.0   0.0     0    14s
+err_replay_patch     | fixes    |  3 100%   3.0   2.0   0.0   0.0     0    17s
+err_ambiguous_edit   | baseline |  3 100%   4.0   3.0   0.0   0.0     1    19s
+err_ambiguous_edit   | fixes    |  3 100%   4.0   3.0   0.0   0.0     1    20s
+err_case_search      | baseline |  3 100%   3.3   2.3   0.0   0.0     1    17s
+err_case_search      | fixes    |  3 100%   9.3   8.3   0.3   0.3     2    40s
+err_hidden_search    | baseline |  3  33%   2.3   1.3   0.0   0.0     1    13s
+err_hidden_search    | fixes    |  3   0%   2.0   1.0   0.0   0.0     0    12s
+err_big_output       | baseline |  3   0%   1.0   0.0   0.0   0.0     0     6s
+err_big_output       | fixes    |  3  33%   3.0   2.0   0.0   0.0    85    27s
+err_multi_dir        | baseline |  3 100%   6.0   5.0   0.0   0.0     0    22s
+err_multi_dir        | fixes    |  3 100%   5.7   4.7   0.0   0.0     0    21s
+err_inline_script    | baseline |  3  33%   1.3   0.3   0.0   0.0     0     7s
+err_inline_script    | fixes    |  3 100%   2.0   1.0   0.0   0.0     0     8s
+err_big_file_read    | baseline |  3  67%   7.3   6.3   0.0   0.0   141   128s
+err_big_file_read    | fixes    |  3 100%  10.3   9.3   0.0   0.0   209   212s
+------------------------------------------------------------------------------
+TOTAL                | baseline | 27  70%   3.8   2.8   0.1   0.1    16    27s
+TOTAL                | fixes    | 27  81%   4.9   3.9   0.1   0.1    33    42s

@@ -1,3 +1,11 @@
+## v6.8 — الدمج الشامل الكامل (77 مشروعًا) + إصلاح انهيار المكتبة 🛠
+
+- **إصلاح انهيار «مكتبة الأبطال»** (ArrayIndexOutOfBoundsException في openRow): صفوف قائمة المشاريع في الجذر كانت بلا وسم النقر — أُعيدت هيكلة الوسوم (T_PROJ/T_DIR/T_FILE) مع حماية كاملة من الصفوف غير المعروفة وفحص الحدود.
+- **إكمال دمج NousResearch بالكامل**: أُضيف 51 مستودعًا جديدًا غير متفرع — كل إضافات hermes-plugin (blender، spotify، mem0، supermemory، homeassistant، telegram-business، touchdesigner وغيرها)، وhermes-foundry، وhermes-example-plugins، وllm-chain، وlm-eval-harness (7342 ملفًا)، وhuskyholdem-bench، وObsidian، وnomos، وneural-steering، وtinker-nemogym، وautonovel، وfinetuning-subnet وغيرها.
+- **المجموع الكلي: 77 مشروعًا — 22,877 ملفًا مصدريًا (~171 ميجابايت معرفة)** داخل مكتبة الأبطال.
+- فحص أمان آلي لكل الملفات الجديدة — نظيف 100%.
+- التثبيت فوق v6.7 مباشرة (توقيع ثابت).
+
 ## v6.7 — إصلاح «App not installed» 🔧 + توقيع ثابت دائم
 
 - **سبب المشكلة**: بيئة البناء أُعيد إنشاؤها فتولّد توقيع debug جديد مختلفًا، وأندرويد يرفض تثبيت تحديث بتوقيع مختلف عن النسخة المثبتة (تظهر رسالة App not installed).

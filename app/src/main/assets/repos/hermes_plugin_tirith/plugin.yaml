@@ -1,0 +1,49 @@
+name: tirith
+version: 0.1.0
+manifest_version: 2
+api_version: 1
+description: >-
+  Scan every terminal command with tirith (https://github.com/sheeki03/tirith) before it runs. A
+  finding sends the command to Hermes's normal approval prompt with tirith's severity and title.
+  Uses a tirith binary you install yourself; nothing is downloaded.
+author: Nous Research
+license: MIT
+homepage: https://github.com/NousResearch/hermes-plugin-tirith
+tags: [security, terminal, approvals]
+requires_hermes: ">=0.21.4"
+provides_hooks:
+  - pre_tool_call
+external_dependencies:
+  - name: tirith
+    install: "brew install tirith  # or a release from https://github.com/sheeki03/tirith/releases"
+    check: "tirith --version"
+config_schema:
+  path:
+    type: str
+    default: "tirith"
+    description: "tirith executable: a name looked up on PATH, or an absolute path (~ expands)."
+  timeout:
+    type: int
+    default: 5
+    description: "Seconds to wait for one scan."
+  offline:
+    type: bool
+    default: true
+    description: >-
+      Pass --offline so scans never contact OSV/deps.dev/ecosyste.ms or Safe Browsing. Turn off to let
+      tirith's threat-intel lookups run (slower; package names leave the machine).
+  min_severity:
+    type: str
+    default: "LOW"
+    choices: [LOW, MEDIUM, HIGH, CRITICAL]
+    description: "Lowest finding severity that asks for approval. Lower findings are ignored."
+  ignore_rules:
+    type: list
+    default: []
+    description: "tirith rule ids that never ask (e.g. analysis_incomplete, lookalike_tld)."
+  fail_closed:
+    type: bool
+    default: false
+    description: >-
+      When tirith is missing, times out or crashes, ask for approval instead of letting the command
+      run unscanned.

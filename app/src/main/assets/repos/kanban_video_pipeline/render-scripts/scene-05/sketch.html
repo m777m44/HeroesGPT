@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Scene 5 — Dependencies Resolving</title>
+  <script>p5.disableFriendlyErrors = true;</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.11.3/p5.min.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<script>
+// === Scene 5: Dependencies Resolving — Synapses Firing ===
+// DAG visualization with traveling light pulses, cascading gold resolution
+// Duration: 17s (408 frames @ 24fps)
+// Critical sync: frame 406 = 1:23.90 = DONE node flash
+
+const WIDTH = 1920;
+const HEIGHT = 1080;
+const FPS = 24;
+const TOTAL_FRAMES = 408;
+
+// Colors
+const GOLD = [245, 184, 32];       // #F5B820
+const DARK_AMBER = [196, 122, 26]; // #C47A1A
+const BLUE = [0, 0, 255];          // #0000FF
+const NAVY = [0, 0, 128];          // #000080
+const NAVY_DARK = [0, 0, 32];      // Node fill unresolved
+
+// Audio features (injected by render script)
+let audioFeatures = null;
+
+// DAG Structure
+// Layer 1: research, spec
+// Layer 2: implement, review, test
+// Layer 3: integrate, deploy
+// Layer 4: DONE
+const NODES = [
+  // Layer 1
+  { id: 'research', label: 'research', layer: 0, y: 0.3 },
+  { id: 'spec',     label: 'spec',     layer: 0, y: 0.7 },
+  // Layer 2
+  { id: 'implement', label: 'implement', layer: 1, y: 0.2 },
+  { id: 'review',    label: 'review',    layer: 1, y: 0.5 },
+  { id: 'test',      label: 'test',      layer: 1, y: 0.8 },
+  // Layer 3
+  { id: 'integrate', label: 'integrate', layer: 2, y: 0.35 },
+  { id: 'deploy',    label: 'deploy',    layer: 2, y: 0.65 },
+  // Layer 4
+  { id: 'done', label: 'DONE', layer: 3, y: 0.5 },
+];
+
+const EDGES = [
+  { from: 'research', to: 'implement' },
+  { from: 'research', to: 'review' },
+  { from: 'spec', to: 'implement' },
+  { from: 'spec', to: 'test' },
+  { from: 'implement', to: 'integrate' },
+  { from: 'review', to: 'integrate' },
+  { from: 'review', to: 'deploy' },
+  { from: 'test', to: 'deploy' },
+  { from: 'integrate', to: 'done' },
+  { from: 'deploy', to: 'done' },
+];
+
+// Resolution timeline (frame when each node starts resolving)
+// Layer 1: 1:07-1:10 = frames 0-72
+// Layer 2: 1:10-1:14 = frames 72-168
+// Layer 3: 1:14-1:18 = frames 168-264
+// DONE: 1:22-1:24 = frames 360-408
+const RESOLVE_SCHEDULE = {
+  'research':  { start: 12, duration: 36 },   // resolves early
+  'spec':      { start: 36, duration: 36 },   // resolves after research
+  'implement': { start: 96, duration: 36 },   // after edges from L1 arrive
+  'review':    { start: 120, duration: 36 },
+  'test':      { start: 144, duration: 36 },
+  'integrate': { start: 216, duration: 36 },
+  'deploy':    { start: 252, duration: 36 },
+  'done':      { start: 360, duration: 32 },  // resolves at frame 392, explosion visible for 16 frames before cut
+};
+
+// Edge activation: starts when parent resolves, pulse travels for ~24 frames
+const EDGE_TRAVEL_FRAMES = 24; // 1 second travel
+
+// State
+let nodes = [];
+let edges = [];
+let particles = [];
+let doneExplosionFrame = -1;
+
+class Node {
+  constructor(data) {
+    this.id = data.id;
+    this.label = data.label;
+    this.layer = data.layer;
+    
+    // Position: distribute layers horizontally
+    const layerX = [0.15, 0.38, 0.62, 0.85];
+    this.x = layerX[data.layer] * WIDTH;
+    this.y = data.y * HEIGHT;
+    
+    // Node size
+    this.radius = data.id === 'done' ? 55 : 35;
+    
+    // State
+    this.state = 'unresolved'; // unresolved, resolving, resolved
+    this.resolveStart = RESOLVE_SCHEDULE[data.id].start;
+    this.resolveDuration = RESOLVE_SCHEDULE[data.id].duration;
+    this.resolveProgress = 0; // 0 to 1
+    
+    // Visual
+    this.pulsePhase = Math.random() * Math.PI * 2;
+    this.glowIntensity = 0;
+    this.scale = 1;
+    this.shockwaveRadius = 0;
+    this.shockwaveAlpha = 0;
+  }
+  
+  update(frame, bassNorm, energyNorm) {
+    // State machine
+    if (frame >= this.resolveStart && this.state === 'unresolved') {
+      this.state = 'resolving';
+    }
+    
+    if (this.state === 'resolving') {
+      this.resolveProgress = Math.min(1, (frame - this.resolveStart) / this.resolveDuration);
+      if (this.resolveProgress >= 1) {
+        this.state = 'resolved';
+        // Trigger resolution pulse
+        this.scale = 1.15;
+        this.shockwaveRadius = 0;
+        this.shockwaveAlpha = 1;
+      }
+    }
+    
+    // Animations
+    this.pulsePhase += 0.05;
+    
+    // Scale spring back
+    if (this.scale > 1) {
+      this.scale = Math.max(1, this.scale - 0.003);
+    }
+    
+    // Shockwave expand
+    if (this.shockwaveAlpha > 0) {
+      this.shockwaveRadius += 3;
+      this.shockwaveAlpha *= 0.94;
+    }
+    
+    // Glow intensity based on state
+    if (this.state === 'resolved') {
+      this.glowIntensity = 0.8 + 0.2 * Math.sin(this.pulsePhase * 0.5);
+    } else if (this.state === 'resolving') {
+      // Pulse faster as it gets closer to resolving
+      let pulseSpeed = 1 + this.resolveProgress * 3;
+      this.glowIntensity = 0.3 + 0.3 * Math.sin(this.pulsePhase * pulseSpeed);
+    } else {
+      // Unresolved: subtle breathing, faster near the end (impatience)
+      let urgency = Math.max(0, (frame - 200) / 200); // grows after frame 200
+      let pulseSpeed = 0.3 + urgency * 2;
+      this.glowIntensity = 0.05 + 0.05 * Math.sin(this.pulsePhase * pulseSpeed);
+    }
+    
+    // Bass reactivity
+    if (this.state !== 'unresolved') {
+      this.glowIntensity += bassNorm * 0.15;
+    }
+  }
+  
+  draw(pg) {
+    pg.push();
+    pg.translate(this.x, this.y);
+    pg.scale(this.scale);
+    
+    // Shockwave ring
+    if (this.shockwaveAlpha > 0.01) {
+      pg.noFill();
+      let sw = this.id === 'done' ? 4 : 2;
+      pg.strokeWeight(sw);
+      let a = this.shockwaveAlpha * 255;
+      if (this.state === 'resolved') {
+        pg.stroke(GOLD[0], GOLD[1], GOLD[2], a);
+      } else {
+        pg.stroke(BLUE[0], BLUE[1], BLUE[2], a);
+      }
+      pg.ellipse(0, 0, this.shockwaveRadius * 2, this.shockwaveRadius * 2);
+    }
+    
+    // Glow halo (for resolved/resolving) — true radial gradient via canvas2D context
+    if (this.glowIntensity > 0.1) {
+      let ctx = pg.drawingContext;
+      ctx.save();
+      
+      if (this.state === 'resolved') {
+        // Soft gold bloom — radial gradient for smooth falloff
+        let outerR = this.radius * 4.5;
+        let grad = ctx.createRadialGradient(0, 0, this.radius * 0.3, 0, 0, outerR);
+        let a = this.glowIntensity;
+        grad.addColorStop(0, `rgba(255, 230, 150, ${a * 0.5})`);
+        grad.addColorStop(0.15, `rgba(245, 184, 32, ${a * 0.4})`);
+        grad.addColorStop(0.4, `rgba(196, 122, 26, ${a * 0.2})`);
+        grad.addColorStop(0.7, `rgba(100, 60, 10, ${a * 0.08})`);
+        grad.addColorStop(1, `rgba(50, 30, 0, 0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, outerR, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (this.state === 'resolving') {
+        // Blue glow gradient
+        let outerR = this.radius * 3.0;
+        let grad = ctx.createRadialGradient(0, 0, this.radius * 0.3, 0, 0, outerR);
+        let a = this.glowIntensity;
+        grad.addColorStop(0, `rgba(50, 50, 255, ${a * 0.35})`);
+        grad.addColorStop(0.3, `rgba(0, 0, 200, ${a * 0.2})`);
+        grad.addColorStop(0.7, `rgba(0, 0, 128, ${a * 0.08})`);
+        grad.addColorStop(1, `rgba(0, 0, 60, 0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(0, 0, outerR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      ctx.restore();
+    }
+    
+    // Node body
+    pg.strokeWeight(2.5);
+    if (this.state === 'resolved') {
+      // Gold filled
+      pg.fill(GOLD[0], GOLD[1], GOLD[2]);
+      pg.stroke(GOLD[0], GOLD[1], GOLD[2], 200);
+    } else if (this.state === 'resolving') {
+      // Filling with blue, border pulsing
+      let fillProgress = this.resolveProgress;
+      let r = lerp(NAVY_DARK[0], BLUE[0], fillProgress * 0.5);
+      let g = lerp(NAVY_DARK[1], BLUE[1], fillProgress * 0.5);
+      let b = lerp(NAVY_DARK[2], BLUE[2] * 0.8, fillProgress);
+      pg.fill(r, g, b);
+      let borderAlpha = 150 + 105 * Math.sin(this.pulsePhase * 2);
+      pg.stroke(BLUE[0], BLUE[1], BLUE[2], borderAlpha);
+    } else {
+      // Unresolved: dark
+      pg.fill(NAVY_DARK[0], NAVY_DARK[1], NAVY_DARK[2]);
+      pg.stroke(NAVY[0], NAVY[1], NAVY[2], 120);
+    }
+    pg.ellipse(0, 0, this.radius * 2, this.radius * 2);
+    
+    // Label
+    pg.noStroke();
+    pg.textAlign(CENTER, CENTER);
+    pg.textFont('monospace');
+    
+    if (this.id === 'done') {
+      pg.textSize(18);
+      if (this.state === 'resolved') {
+        pg.fill(0);
+      } else {
+        pg.fill(150, 150, 150, 180);
+      }
+    } else {
+      pg.textSize(11);
+      if (this.state === 'resolved') {
+        pg.fill(0);
+      } else {
+        pg.fill(150, 150, 150, 140);
+      }
+    }
+    pg.text(this.label, 0, 0);
+    
+    pg.pop();
+  }
+}
+
+class Edge {
+  constructor(data, nodeMap) {
+    this.fromNode = nodeMap[data.from];
+    this.toNode = nodeMap[data.to];
+    this.fromId = data.from;
+    this.toId = data.to;
+    
+    // State
+    this.state = 'unresolved'; // unresolved, firing, resolved
+    this.fireStartFrame = -1;
+    this.fireProgress = 0; // 0 to 1 (pulse position along edge)
+    this.resolved = false;
+    this.glowIntensity = 0;
+    
+    // Control points for bezier
+    let dx = this.toNode.x - this.fromNode.x;
+    this.cp1x = this.fromNode.x + dx * 0.4;
+    this.cp1y = this.fromNode.y;
+    this.cp2x = this.fromNode.x + dx * 0.6;
+    this.cp2y = this.toNode.y;
+  }
+  
+  update(frame, hiNorm) {
+    // Fire when parent resolves
+    if (this.state === 'unresolved' && this.fromNode.state === 'resolved') {
+      this.state = 'firing';
+      this.fireStartFrame = frame;
+    }
+    
+    if (this.state === 'firing') {
+      this.fireProgress = Math.min(1, (frame - this.fireStartFrame) / EDGE_TRAVEL_FRAMES);
+      
+      // Hi-hat: pulse jumps forward slightly
+      if (hiNorm > 0.6) {
+        this.fireProgress = Math.min(1, this.fireProgress + 0.02);
+      }
+      
+      if (this.fireProgress >= 1) {
+        this.state = 'resolved';
+        this.glowIntensity = 1;
+      }
+    }
+    
+    // Glow decay for resolved edges
+    if (this.state === 'resolved') {
+      this.glowIntensity = Math.max(0.3, this.glowIntensity * 0.98);
+    }
+  }
+  
+  getPointOnCurve(t) {
+    let x = bezierPoint(this.fromNode.x, this.cp1x, this.cp2x, this.toNode.x, t);
+    let y = bezierPoint(this.fromNode.y, this.cp1y, this.cp2y, this.toNode.y, t);
+    return { x, y };
+  }
+  
+  draw(pg) {
+    pg.noFill();
+    
+    if (this.state === 'unresolved') {
+      // Dark, barely visible
+      pg.strokeWeight(1);
+      pg.stroke(NAVY[0], NAVY[1], NAVY[2], 40);
+      pg.bezier(
+        this.fromNode.x, this.fromNode.y,
+        this.cp1x, this.cp1y,
+        this.cp2x, this.cp2y,
+        this.toNode.x, this.toNode.y
+      );
+    } else if (this.state === 'firing') {
+      // Base edge (dim blue behind the pulse)
+      pg.strokeWeight(1.5);
+      pg.stroke(BLUE[0], BLUE[1], BLUE[2], 50);
+      pg.bezier(
+        this.fromNode.x, this.fromNode.y,
+        this.cp1x, this.cp1y,
+        this.cp2x, this.cp2y,
+        this.toNode.x, this.toNode.y
+      );
+      
+      // Lit portion (from start to pulse position) - gold
+      pg.strokeWeight(2.5);
+      let steps = Math.floor(this.fireProgress * 30);
+      for (let i = 0; i < steps; i++) {
+        let t0 = i / 30;
+        let t1 = (i + 1) / 30;
+        if (t1 > this.fireProgress) t1 = this.fireProgress;
+        let p0 = this.getPointOnCurve(t0);
+        let p1 = this.getPointOnCurve(t1);
+        // Fade from full gold near pulse to dimmer behind
+        let dist = this.fireProgress - t0;
+        let alpha = Math.max(80, 255 * (1 - dist * 2));
+        pg.stroke(GOLD[0], GOLD[1], GOLD[2], alpha);
+        pg.line(p0.x, p0.y, p1.x, p1.y);
+      }
+      
+      // The traveling pulse head (bright white-gold point)
+      let pulsePos = this.getPointOnCurve(this.fireProgress);
+      pg.noStroke();
+      // Outer glow
+      pg.fill(GOLD[0], GOLD[1], GOLD[2], 100);
+      pg.ellipse(pulsePos.x, pulsePos.y, 20, 20);
+      // Inner bright
+      pg.fill(255, 240, 200, 220);
+      pg.ellipse(pulsePos.x, pulsePos.y, 8, 8);
+      // Core
+      pg.fill(255, 255, 255, 250);
+      pg.ellipse(pulsePos.x, pulsePos.y, 4, 4);
+      
+    } else if (this.state === 'resolved') {
+      // Fully resolved: gold edge with prominent glow
+      // Outer glow layer
+      pg.strokeWeight(8);
+      let a = this.glowIntensity * 60;
+      pg.stroke(GOLD[0], GOLD[1], GOLD[2], a);
+      pg.bezier(
+        this.fromNode.x, this.fromNode.y,
+        this.cp1x, this.cp1y,
+        this.cp2x, this.cp2y,
+        this.toNode.x, this.toNode.y
+      );
+      // Main edge
+      pg.strokeWeight(2.5);
+      a = this.glowIntensity * 220;
+      pg.stroke(GOLD[0], GOLD[1], GOLD[2], a);
+      pg.bezier(
+        this.fromNode.x, this.fromNode.y,
+        this.cp1x, this.cp1y,
+        this.cp2x, this.cp2y,
+        this.toNode.x, this.toNode.y
+      );
+      // Bright core
+      pg.strokeWeight(1);
+      pg.stroke(255, 240, 200, a * 0.6);
+      pg.bezier(
+        this.fromNode.x, this.fromNode.y,
+        this.cp1x, this.cp1y,
+        this.cp2x, this.cp2y,
+        this.toNode.x, this.toNode.y
+      );
+    }
+    
+    // Arrow head at end
+    if (this.state !== 'unresolved') {
+      let endT = this.state === 'firing' ? Math.min(this.fireProgress, 0.92) : 0.92;
+      let p1 = this.getPointOnCurve(endT);
+      let p2 = this.getPointOnCurve(Math.min(1, endT + 0.04));
+      let angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      
+      if (this.state === 'resolved') {
+        pg.fill(GOLD[0], GOLD[1], GOLD[2], this.glowIntensity * 200);
+      } else {
+        pg.fill(GOLD[0], GOLD[1], GOLD[2], 180);
+      }
+      pg.noStroke();
+      pg.push();
+      pg.translate(p2.x, p2.y);
+      pg.rotate(angle);
+      pg.triangle(0, 0, -10, -4, -10, 4);
+      pg.pop();
+    }
+  }
+}
+
+class Particle {
+  constructor(x, y, vx, vy, life, color) {
+    this.x = x;
+    this.y = y;
+    this.vx = vx;
+    this.vy = vy;
+    this.life = life;
+    this.maxLife = life;
+    this.color = color;
+    this.size = Math.random() * 4 + 1.5;
+  }
+  
+  update() {
+    this.x += this.vx;
+    this.y += this.vy;
+    this.vy += 0.08; // gravity
+    this.vx *= 0.98;
+    this.vy *= 0.98;
+    this.life--;
+    return this.life > 0;
+  }
+  
+  draw(pg) {
+    let alpha = (this.life / this.maxLife) * 255;
+    pg.noStroke();
+    // Glow layer for larger particles
+    if (this.size > 2) {
+      pg.fill(this.color[0], this.color[1], this.color[2], alpha * 0.3);
+      pg.ellipse(this.x, this.y, this.size * 3, this.size * 3);
+    }
+    pg.fill(this.color[0], this.color[1], this.color[2], alpha);
+    pg.ellipse(this.x, this.y, this.size, this.size);
+  }
+}
+
+// Globals
+let mainBuffer;
+let nodeMap = {};
+
+function setup() {
+  createCanvas(WIDTH, HEIGHT);
+  pixelDensity(1);
+  noLoop();
+  
+  mainBuffer = createGraphics(WIDTH, HEIGHT);
+  mainBuffer.smooth();
+  
+  // Initialize nodes
+  for (let nd of NODES) {
+    let node = new Node(nd);
+    nodes.push(node);
+    nodeMap[nd.id] = node;
+  }
+  
+  // Initialize edges
+  for (let ed of EDGES) {
+    edges.push(new Edge(ed, nodeMap));
+  }
+  
+  window._p5Ready = true;
+}
+
+function draw() {
+  let frame = frameCount - 1; // 0-indexed
+  if (frame >= TOTAL_FRAMES) {
+    noLoop();
+    return;
+  }
+  
+  // Lazy-load audio features from window (injected by capture script)
+  if (!audioFeatures && window.AUDIO_FEATURES) {
+    audioFeatures = window.AUDIO_FEATURES;
+  }
+  
+  // Get audio features for this frame
+  let bassNorm = 0.5, midNorm = 0.5, hiNorm = 0.3, energyNorm = 0.5;
+  if (audioFeatures && audioFeatures.features && audioFeatures.features[frame]) {
+    let af = audioFeatures.features[frame];
+    bassNorm = af.bass_norm;
+    midNorm = af.mid_norm;
+    hiNorm = af.hi_norm;
+    energyNorm = af.energy_norm;
+  }
+  
+  let pg = mainBuffer;
+  
+  // Background: pure black with subtle radial navy + void texture
+  pg.background(0);
+  
+  // Subtle radial gradient from center (the graph's background "pressure")
+  let graphBrightness = Math.min(1, frame / 300) * 0.15 + energyNorm * 0.05;
+  pg.noStroke();
+  for (let i = 5; i > 0; i--) {
+    let r = (WIDTH * 0.5) * (i / 5);
+    let alpha = graphBrightness * 35 / i;
+    pg.fill(0, 0, 50, alpha);
+    pg.ellipse(WIDTH / 2, HEIGHT / 2, r * 2, r * 2);
+  }
+  
+  // Void texture: scattered dots that breathe with bass (INTENSITY 1)
+  let voidDensity = 40 + Math.floor(bassNorm * 30);
+  pg.noStroke();
+  for (let i = 0; i < voidDensity; i++) {
+    // Use deterministic positions based on frame for coherence
+    let seed = i * 7919 + Math.floor(frame * 0.1) * 13;
+    let vx = ((seed * 1103515245 + 12345) & 0x7FFFFFFF) / 0x7FFFFFFF * WIDTH;
+    let vy = ((seed * 1103515245 * 3 + 54321) & 0x7FFFFFFF) / 0x7FFFFFFF * HEIGHT;
+    let vAlpha = 15 + bassNorm * 25;
+    pg.fill(0, 0, 80, vAlpha);
+    pg.ellipse(vx, vy, 1.5, 1.5);
+  }
+  
+  // Neural connection lines: faint grid-like structure behind the graph
+  if (frame > 20) {
+    let lineAlpha = Math.min(20, (frame - 20) * 0.2) + energyNorm * 8;
+    pg.stroke(0, 0, 60, lineAlpha);
+    pg.strokeWeight(0.5);
+    // Horizontal neural strands
+    for (let i = 0; i < 6; i++) {
+      let y = HEIGHT * 0.15 + (HEIGHT * 0.7) * (i / 5);
+      let wobble = Math.sin(frame * 0.02 + i * 1.3) * 5;
+      pg.line(WIDTH * 0.05, y + wobble, WIDTH * 0.95, y + wobble * 0.7);
+    }
+  }
+  
+  // Update all edges
+  for (let edge of edges) {
+    edge.update(frame, hiNorm);
+  }
+  
+  // Update all nodes
+  for (let node of nodes) {
+    node.update(frame, bassNorm, energyNorm);
+  }
+  
+  // Spawn particles from resolved edges (gold dust) — high density
+  for (let edge of edges) {
+    if (edge.state === 'firing') {
+      // Sparks along the pulse trail — multiple per frame
+      for (let s = 0; s < 3; s++) {
+        if (Math.random() < 0.6) {
+          let pos = edge.getPointOnCurve(edge.fireProgress * (0.3 + Math.random() * 0.7));
+          particles.push(new Particle(
+            pos.x + (Math.random() - 0.5) * 8,
+            pos.y + (Math.random() - 0.5) * 8,
+            (Math.random() - 0.5) * 1.2,
+            Math.random() * 1.0 + 0.3,
+            Math.floor(Math.random() * 50 + 30),
+            GOLD
+          ));
+        }
+      }
+    } else if (edge.state === 'resolved') {
+      // Continuous gold dust drifting from resolved edges
+      if (Math.random() < 0.15) {
+        let t = Math.random();
+        let pos = edge.getPointOnCurve(t);
+        particles.push(new Particle(
+          pos.x + (Math.random() - 0.5) * 15,
+          pos.y,
+          (Math.random() - 0.5) * 0.4,
+          Math.random() * 0.6 + 0.2,
+          Math.floor(Math.random() * 60 + 40),
+          Math.random() < 0.6 ? GOLD : DARK_AMBER
+        ));
+      }
+    }
+  }
+  
+  // Ambient atmospheric particles from resolved nodes (constant golden atmosphere)
+  for (let node of nodes) {
+    if (node.state === 'resolved' && Math.random() < 0.2) {
+      let angle = Math.random() * Math.PI * 2;
+      let dist = Math.random() * node.radius * 2;
+      particles.push(new Particle(
+        node.x + Math.cos(angle) * dist,
+        node.y + Math.sin(angle) * dist,
+        (Math.random() - 0.5) * 0.5,
+        -Math.random() * 0.3 - 0.1, // drift upward slightly
+        Math.floor(Math.random() * 70 + 40),
+        Math.random() < 0.3 ? [255, 220, 120] : GOLD
+      ));
+    }
+  }
+  
+  // Spawn hi-hat particles
+  if (hiNorm > 0.5 && Math.random() < hiNorm * 0.5) {
+    let randNode = nodes[Math.floor(Math.random() * nodes.length)];
+    if (randNode.state !== 'unresolved') {
+      particles.push(new Particle(
+        randNode.x + (Math.random() - 0.5) * 60,
+        randNode.y + (Math.random() - 0.5) * 60,
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2,
+        Math.floor(Math.random() * 20 + 10),
+        [255, 255, 255]
+      ));
+    }
+  }
+  
+  // DONE explosion at frame ~406 (sync to 1:23.90)
+  let doneNode = nodeMap['done'];
+  if (doneNode.state === 'resolved' && doneExplosionFrame < 0) {
+    doneExplosionFrame = frame;
+    // Massive particle burst
+    for (let i = 0; i < 200; i++) {
+      let angle = Math.random() * Math.PI * 2;
+      let speed = Math.random() * 8 + 3;
+      particles.push(new Particle(
+        doneNode.x, doneNode.y,
+        Math.cos(angle) * speed,
+        Math.sin(angle) * speed,
+        Math.floor(Math.random() * 60 + 40),
+        Math.random() < 0.7 ? GOLD : [255, 240, 180]
+      ));
+    }
+  }
+  
+  // Radial shockwave from DONE explosion
+  let shockwaveProgress = -1;
+  if (doneExplosionFrame >= 0) {
+    shockwaveProgress = (frame - doneExplosionFrame) / 20; // 20 frames to sweep
+  }
+  
+  // Update particles
+  particles = particles.filter(p => p.update());
+  
+  // Draw order: edges (back), particles (mid), nodes (front)
+  
+  // Draw edges
+  for (let edge of edges) {
+    edge.draw(pg);
+  }
+  
+  // Draw particles
+  for (let p of particles) {
+    p.draw(pg);
+  }
+  
+  // Draw nodes
+  for (let node of nodes) {
+    node.draw(pg);
+  }
+  
+  // Radial gold shockwave (DONE explosion outward sweep)
+  if (shockwaveProgress >= 0 && shockwaveProgress < 1.5) {
+    let maxRadius = WIDTH * 0.8;
+    let radius = shockwaveProgress * maxRadius;
+    let alpha = Math.max(0, 1 - shockwaveProgress) * 200;
+    pg.noFill();
+    pg.strokeWeight(6);
+    pg.stroke(GOLD[0], GOLD[1], GOLD[2], alpha);
+    pg.ellipse(doneNode.x, doneNode.y, radius * 2, radius * 2);
+    // Inner thinner ring
+    pg.strokeWeight(2);
+    pg.stroke(255, 240, 200, alpha * 0.7);
+    pg.ellipse(doneNode.x, doneNode.y, radius * 1.6, radius * 1.6);
+  }
+  
+  // Kick drum frame flash (brightness pulse)
+  if (bassNorm > 0.75) {
+    let flashAlpha = (bassNorm - 0.75) * 4 * 15; // max ~15
+    pg.fill(255, 255, 255, flashAlpha);
+    pg.noStroke();
+    pg.rect(0, 0, WIDTH, HEIGHT);
+  }
+  
+  // Overall brightness ramp (graph emerging from darkness over time)
+  // First few frames: dim. By end: full brightness.
+  let fadeIn = Math.min(1, frame / 30); // 30 frames fade in
+  if (fadeIn < 1) {
+    pg.fill(0, 0, 0, (1 - fadeIn) * 200);
+    pg.noStroke();
+    pg.rect(0, 0, WIDTH, HEIGHT);
+  }
+  
+  // Render to main canvas
+  image(mainBuffer, 0, 0);
+}
+
+// Audio features are injected via window.AUDIO_FEATURES by the capture script
+// Read them lazily in draw() to handle injection timing
+</script>
+</body>
+</html>

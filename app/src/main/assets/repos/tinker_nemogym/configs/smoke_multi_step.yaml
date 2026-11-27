@@ -1,0 +1,46 @@
+# Smoke-test config for the multi_step env. Paths are relative to the
+# tinker-nemogym repo root.
+
+schema_version: 1
+
+tinker:
+  base_model: meta-llama/Llama-3.1-8B-Instruct
+  lora_rank: 32
+  learning_rate: 5.0e-4
+  adam_beta1: 0.9
+  adam_beta2: 0.95
+  adam_eps: 1.0e-12
+  loss_fn: importance_sampling
+  wandb_project: null
+  wandb_name: null
+  checkpoint_dir: ./checkpoints/smoke_multi_step
+  resume_from_checkpoint: null
+
+model_server:
+  host: 127.0.0.1
+  port: 8001
+  stop_tokens: []
+
+nemogym:
+  # Leave agent_url null so the trainer discovers the agent port dynamically
+  # via the HeadServer's /server_instances endpoint. See
+  # tinker_nemogym/utils/process.py::discover_agent_url.
+  agent_url: null
+  head_url: http://127.0.0.1:11000
+  dataset_jsonl: tinker_nemogym/environments/multi_step/dataset.jsonl
+  group_size: 2
+  ng_run_yamls: []
+
+training:
+  n_steps: 2
+  batch_size: 2
+  max_tokens: 512
+  temperature: 1.0
+  save_every: 2
+  eval_every: 100
+  # Drop constant-reward groups by default, but accepted at the e2e harness
+  # level (which sets False for deterministic verifiers).
+  drop_constant_reward: true
+  # Precision-gap (β) diagnostic. See configs/smoke_diagnostics.yaml
+  # + docs/diagnostics.md. Off by default; flip on when auditing a model.
+  measure_precision_gap: false
