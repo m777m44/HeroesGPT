@@ -6,6 +6,15 @@ android {
     namespace 'com.heroes.gpt'
     compileSdk 34
 
+    signingConfigs {
+        heroes {
+            storeFile rootProject.file('keystore/heroes.jks')
+            storePassword 'HeroesGPT2026'
+            keyAlias 'heroes'
+            keyPassword 'HeroesGPT2026'
+        }
+    }
+
     aaptOptions {
         ignoreAssetsPattern '!.svn:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
@@ -14,13 +23,17 @@ android {
         applicationId "com.heroes.gpt"
         minSdk 24
         targetSdk 34
-        versionCode 18
-        versionName "6.6"
+        versionCode 19
+        versionName "6.7"
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.heroes
+        }
+        debug {
+            signingConfig signingConfigs.heroes
         }
     }
 
