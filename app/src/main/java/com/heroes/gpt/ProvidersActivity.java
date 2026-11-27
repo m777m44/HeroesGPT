@@ -102,6 +102,49 @@ public class ProvidersActivity extends Activity {
         providers = Stores.providers(this);
         adapter = new ProviderAdapter();
         ((ListView) findViewById(R.id.provider_list)).setAdapter(adapter);
+        KeyVault.autoRestoreIfEmpty(this);
+    }
+
+    public void onVault(View v) {
+        String fp = KeyVault.fingerprint(this);
+        String msg = getString(R.string.vault_msg)
+                + (fp.isEmpty() ? "\n\n" + getString(R.string.vault_no_keys)
+                                : "\n\n" + getString(R.string.vault_fp, fp));
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.vault_title)
+                .setMessage(msg)
+                .setPositiveButton(R.string.vault_upload, (d, w) -> vaultRun(true))
+                .setNeutralButton(R.string.vault_restore, (d, w) -> vaultRun(false))
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    private void vaultRun(final boolean upload) {
+        final android.app.ProgressDialog pd = new android.app.ProgressDialog(this);
+        pd.setMessage(getString(upload ? R.string.vault_uploading : R.string.vault_restoring));
+        pd.setCancelable(false);
+        pd.show();
+        new Thread(() -> {
+            String result;
+            try {
+                result = upload ? KeyVault.upload(this) : KeyVault.restore(this);
+                if (!upload) {
+                    providers = Stores.providers(this);
+                    runOnUiThread(() -> adapter.notifyDataSetChanged());
+                }
+            } catch (Exception e) {
+                result = "⚠ " + e.getMessage();
+            }
+            final String shown = result;
+            runOnUiThread(() -> {
+                try { pd.dismiss(); } catch (Exception ignored) { }
+                new AlertDialog.Builder(this)
+                        .setTitle(upload ? R.string.vault_title : R.string.vault_restore)
+                        .setMessage(shown)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show();
+            });
+        }).start();
     }
 
     public void onQuickImport(View v) {

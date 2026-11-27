@@ -247,4 +247,13 @@
     <string name="repo_open_project">فتح المشروع</string>
     <string name="repo_back">رجوع</string>
     <string name="repo_projects_count">مشاريع</string>
+    <string name="vault_btn">🔐 خزنة المفاتيح المشفرة</string>
+    <string name="vault_title">🛡 الخزنة المشفرة</string>
+    <string name="vault_msg">مفاتيحك تُشفَّر بمعيار AES-256-GCM العسكري مع اشتقاق PBKDF2 (120 ألف جولة) — في المستودع لا يظهر أي مفتاح بصيغته الأصلية، وحتى أي تعديل حرف واحد في الملف يُكشف ويُرفض تلقائيًا. التطبيق يفك التشفير ويشغّل المفاتيح تلقائيًا بلا أي إعداد.</string>
+    <string name="vault_no_keys">لا توجد مفاتيح محفوظة بعد — أضف مفاتيحك أولًا (المستورد السريع أو يدويًا) ثم ارفع الخزنة.</string>
+    <string name="vault_fp">بصمة الخزنة الحالية: %1$s</string>
+    <string name="vault_upload">⬆️ رفع الخزنة إلى المستودع</string>
+    <string name="vault_restore">⬇️ استعادة من الخزنة</string>
+    <string name="vault_uploading">جارٍ تشفير ورفع الخزنة…</string>
+    <string name="vault_restoring">جارٍ فك التشفير والاستعادة…</string>
 </resources>

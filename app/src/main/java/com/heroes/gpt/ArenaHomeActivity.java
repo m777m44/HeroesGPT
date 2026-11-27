@@ -68,6 +68,7 @@ public class ArenaHomeActivity extends Activity {
         } catch (Throwable t) {
             CrashCatcher.showErrorScreen(this, t);
         }
+        KeyVault.autoRestoreIfEmpty(this);
     }
 
     private void setupAll(Bundle savedInstanceState) {
