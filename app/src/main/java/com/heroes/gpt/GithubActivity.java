@@ -13,6 +13,9 @@ import java.util.List;
 
 public class GithubActivity extends Activity {
 
+    private static final int REQ_PICK_FILES = 9101;
+    private static final int REQ_PICK_FOLDER = 9102;
+
     private LinearLayout loginPanel;
     private LinearLayout accountPanel;
     private TextView whoami;
@@ -44,8 +47,235 @@ public class GithubActivity extends Activity {
         findViewById(R.id.gh_browse).setOnClickListener(v -> browse());
         findViewById(R.id.gh_push_last).setOnClickListener(v -> pushLastRun());
         findViewById(R.id.gh_build).setOnClickListener(v -> buildApk());
-        findViewById(R.id.gh_open_web).setOnClickListener(v -> openRepo());
+        findViewById(R.id.gh_open_web).setOnClickListener(v -> openRepoWeb());
+        findViewById(R.id.gh_upload_files).setOnClickListener(v -> pickFiles());
+        findViewById(R.id.gh_upload_folder).setOnClickListener(v -> pickFolder());
         refresh();
+    }
+
+    // ===== رفع ملفات عبر SAF — كل الأنواع، من أي مكان (بما فيه Drive/OneDrive) =====
+    private void pickFiles() {
+        if (Stores.setting(this, "gh_repo").isEmpty()) {
+            Toast.makeText(this, R.string.gh_pick_repo_first, Toast.LENGTH_LONG).show();
+            return;
+        }
+        android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        i.setType("*/*");
+        i.putExtra(android.content.Intent.EXTRA_ALLOW_MULTIPLE, true);
+        try {
+            startActivityForResult(i, REQ_PICK_FILES);
+        } catch (Exception e) {
+            Toast.makeText(this, R.string.save_failed_picker, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void pickFolder() {
+        if (Stores.setting(this, "gh_repo").isEmpty()) {
+            Toast.makeText(this, R.string.gh_pick_repo_first, Toast.LENGTH_LONG).show();
+            return;
+        }
+        android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT_TREE);
+        try {
+            startActivityForResult(i, REQ_PICK_FOLDER);
+        } catch (Exception e) {
+            Toast.makeText(this, R.string.save_failed_picker, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != RESULT_OK || data == null) return;
+        List<android.net.Uri> uris = new java.util.ArrayList<>();
+        if (requestCode == REQ_PICK_FILES) {
+            if (data.getData() != null) uris.add(data.getData());
+            android.content.ClipData clip = data.getClipData();
+            if (clip != null) {
+                for (int i = 0; i < clip.getItemCount(); i++) {
+                    android.net.Uri u = clip.getItemAt(i).getUri();
+                    if (u != null) uris.add(u);
+                }
+            }
+        } else if (requestCode == REQ_PICK_FOLDER) {
+            if (data.getData() != null) uris.add(data.getData());
+        }
+        if (uris.isEmpty()) return;
+        // احتفظ بصلاحية الوصول عبر إعادة التشغيل
+        for (android.net.Uri u : uris) {
+            try {
+                final int takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        | android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
+                getContentResolver().takePersistableUriPermission(u, takeFlags);
+            } catch (Exception ignored) { }
+        }
+        if (requestCode == REQ_PICK_FOLDER) uploadFolder(uris.get(0));
+        else uploadPicked(uris);
+    }
+
+    private void uploadPicked(final List<android.net.Uri> uris) {
+        busy(R.string.pushing, (dlg) -> {
+            List<Github.Entry> files = new java.util.ArrayList<>();
+            StringBuilder skipped = new StringBuilder();
+            for (android.net.Uri u : uris) {
+                try {
+                    String name = queryName(u);
+                    if (name == null || name.isEmpty()) name = "file_" + files.size();
+                    byte[] bytes = readAll(u);
+                    if (bytes == null || bytes.length == 0) { skipped.append(name).append("، "); continue; }
+                    Github.Entry e = new Github.Entry();
+                    e.path = "uploads/" + name;
+                    e.content = bytesToText(bytes, name);
+                    if (e.content == null) { skipped.append(name).append("، "); continue; }
+                    files.add(e);
+                } catch (Exception ex) {
+                    skipped.append("uri#").append(files.size()).append("، ");
+                }
+            }
+            String result;
+            if (files.isEmpty()) {
+                result = "⚠ لم يُعثر على ملفات نصية قابلة للرفع" + (skipped.length() > 0 ? " (تجاوز: " + skipped + ")" : "");
+            } else {
+                final String repo = Stores.setting(this, "gh_repo");
+                final String token = Stores.setting(this, "gh_token");
+                try {
+                    Github.CommitResult cr = Github.commitAll(token, repo, files, "HeroesGPT/uploads",
+                            "HeroesGPT: رفع " + files.size() + " ملف من الجهاز عبر SAF", null);
+                    result = cr.log.toString().trim();
+                } catch (Exception ex) {
+                    result = "⚠ " + (ex.getMessage() == null ? "خطأ" : ex.getMessage());
+                }
+            }
+            dlg.dismiss();
+            showPushResult(result);
+        });
+    }
+
+    private void uploadFolder(final android.net.Uri treeUri) {
+        busy(R.string.pushing, (dlg) -> {
+            List<Github.Entry> files = new java.util.ArrayList<>();
+            StringBuilder logSb = new StringBuilder();
+            try {
+                android.net.Uri doc = android.provider.DocumentsContract.buildDocumentUriUsingTree(treeUri,
+                        android.provider.DocumentsContract.getTreeDocumentId(treeUri));
+                walkFolder(doc, doc, "", files, logSb, 0);
+            } catch (Exception ex) {
+                logSb.append("قراءة المجلد: ").append(ex.getMessage());
+            }
+            String result;
+            if (files.isEmpty()) {
+                result = "⚠ لا ملفات نصية في المجلد" + (logSb.length() > 0 ? " — " + logSb : "");
+            } else {
+                final String repo = Stores.setting(this, "gh_repo");
+                final String token = Stores.setting(this, "gh_token");
+                try {
+                    Github.CommitResult cr = Github.commitAll(token, repo, files, "HeroesGPT/folder",
+                            "HeroesGPT: رفع مجلد (" + files.size() + " ملف) عبر SAF", null);
+                    result = cr.log.toString().trim();
+                } catch (Exception ex) {
+                    result = "⚠ " + (ex.getMessage() == null ? "خطأ" : ex.getMessage());
+                }
+            }
+            dlg.dismiss();
+            showPushResult(result);
+        });
+    }
+
+    /** تجوّل يعيد الملفات النصية داخل المجلد (عمق محدود لحماية الذاكرة). */
+    private void walkFolder(android.net.Uri treeDoc, android.net.Uri dirUri, String prefix,
+                            List<Github.Entry> files, StringBuilder logSb, int depth) throws Exception {
+        if (depth > 6 || files.size() > 400) return;
+        android.net.Uri childrenUri = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(
+                treeDoc, android.provider.DocumentsContract.getDocumentId(dirUri));
+        android.database.Cursor c = getContentResolver().query(childrenUri,
+                new String[]{android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                        android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                        android.provider.DocumentsContract.Document.COLUMN_MIME_TYPE}, null, null, null);
+        if (c == null) return;
+        while (c.moveToNext()) {
+            String docId = c.getString(0);
+            String name = c.getString(1);
+            String mime = c.getString(2);
+            if (name == null) continue;
+            android.net.Uri child = android.provider.DocumentsContract.buildDocumentUriUsingTree(treeDoc, docId);
+            if (android.provider.DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
+                if (name.startsWith(".")) continue;
+                walkFolder(treeDoc, child, prefix + name + "/", files, logSb, depth + 1);
+            } else if (isTextFile(name, mime)) {
+                try {
+                    byte[] bytes = readAll(child);
+                    if (bytes == null || bytes.length == 0 || bytes.length > 900_000) continue;
+                    Github.Entry e = new Github.Entry();
+                    e.path = prefix + name;
+                    e.content = bytesToText(bytes, name);
+                    if (e.content != null) files.add(e);
+                } catch (Exception ignored) { }
+            }
+        }
+        c.close();
+    }
+
+    private static boolean isTextFile(String name, String mime) {
+        if (mime != null && (mime.startsWith("text/") || mime.contains("json") || mime.contains("xml"))) return true;
+        String n = name.toLowerCase();
+        String[] exts = {".py", ".js", ".java", ".kt", ".json", ".txt", ".md", ".xml", ".html",
+                ".css", ".csv", ".yaml", ".yml", ".sh", ".gradle", ".ts", ".c", ".cpp", ".h", ".rs", ".go"};
+        for (String x : exts) if (n.endsWith(x)) return true;
+        return false;
+    }
+
+    private static String bytesToText(byte[] bytes, String name) {
+        String n = name.toLowerCase();
+        if (n.endsWith(".zip") || n.endsWith(".png") || n.endsWith(".jpg") || n.endsWith(".jpeg")
+                || n.endsWith(".pdf") || n.endsWith(".mp4") || n.endsWith(".mp3") || n.endsWith(".apk")) {
+            return null; // ثنائيات غير مدعومة في رفع النصوص — تجاوز آمن
+        }
+        return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private byte[] readAll(android.net.Uri u) throws Exception {
+        java.io.InputStream in = getContentResolver().openInputStream(u);
+        if (in == null) return null;
+        java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = in.read(buf)) > 0) bo.write(buf, 0, n);
+        in.close();
+        return bo.toByteArray();
+    }
+
+    private String queryName(android.net.Uri u) {
+        android.database.Cursor c = null;
+        try {
+            c = getContentResolver().query(u, null, null, null, null);
+            if (c != null && c.moveToFirst()) {
+                int idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                if (idx >= 0) return c.getString(idx);
+            }
+        } catch (Exception ignored) {
+        } finally {
+            if (c != null) c.close();
+        }
+        return null;
+    }
+
+    private void showPushResult(final String result) {
+        runOnUiThread(() -> new AlertDialog.Builder(this)
+                .setTitle(R.string.push_done_title)
+                .setMessage(result)
+                .setPositiveButton(R.string.open_repo, (d2, w2) ->
+                        Utils.openUrl(this, "https://github.com/" + Stores.setting(this, "gh_repo")))
+                .setNegativeButton(R.string.close, null)
+                .show());
+    }
+
+    private void openRepoWeb() {
+        String repo = Stores.setting(this, "gh_repo");
+        if (repo.isEmpty()) {
+            Toast.makeText(this, R.string.gh_pick_repo_first, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Utils.openUrl(this, "https://github.com/" + repo);
     }
 
     private void refresh() {
@@ -328,15 +558,6 @@ public class GithubActivity extends Activity {
                 })
                 .setNegativeButton(R.string.cancel, null)
                 .show();
-    }
-
-    private void openRepo() {
-        String repo = Stores.setting(this, "gh_repo");
-        if (repo.isEmpty()) {
-            Toast.makeText(this, R.string.gh_pick_repo_first, Toast.LENGTH_SHORT).show();
-            return;
-        }
-        Utils.openUrl(this, "https://github.com/" + repo);
     }
 
     private void ghError(Exception e) {

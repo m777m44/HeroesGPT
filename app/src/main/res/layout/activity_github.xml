@@ -166,6 +166,24 @@
                 android:text="@string/gh_push_last" />
 
             <Button
+                android:id="@+id/gh_upload_files"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/text"
+                android:background="@drawable/bg_pill"
+                android:text="@string/gh_upload_files" />
+
+            <Button
+                android:id="@+id/gh_upload_folder"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/text"
+                android:background="@drawable/bg_pill"
+                android:text="@string/gh_upload_folder" />
+
+            <Button
                 android:id="@+id/gh_build"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
