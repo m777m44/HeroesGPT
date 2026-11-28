@@ -1,0 +1,10 @@
+{
+  "name": "core",
+  "version": "0.0.0",
+  "$schema": "https://json.schemastore.org/package.json",
+  "type": "module",
+  "main": "./src/index.ts",
+  "devDependencies": {
+    "@tsconfig/bun": "catalog:"
+  }
+}

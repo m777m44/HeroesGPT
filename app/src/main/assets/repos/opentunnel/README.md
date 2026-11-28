@@ -1,0 +1,159 @@
+# OpenTunnel
+
+<a href="https://opencode.ai"><picture><source media="(prefers-color-scheme: dark)" srcset="https://opencode.ai/brand/badges/opencode-built-with-g-dark-20.svg"><img alt="Built with OpenCode" src="https://opencode.ai/brand/badges/opencode-built-with-g-light-20.svg" height="20" /></picture></a>
+
+OpenTunnel is a blind TLS tunnel. Each client receives a unique
+`<id>.opentunnel.xyz` hostname and terminates TLS locally, so the server never
+holds the certificate private key or sees HTTP plaintext.
+
+## Installation
+
+Install the CLI with any of:
+
+```bash
+curl -fsSL https://opentunnel.xyz/install | sh
+brew install anomalyco/tap/opentunnel
+yay -S opentunnel-bin                  # Arch Linux (AUR)
+npm install -g opentunnel              # or bun / pnpm
+cargo install opentunnel-cli
+```
+
+Prebuilt binaries for Linux and macOS (x64 and arm64) are attached to each
+[GitHub release](https://github.com/anomalyco/opentunnel/releases).
+
+Then route a local port. This creates the tunnel on first use, starts the
+background service, and prints the route's URL:
+
+```bash
+opentunnel route add 3000
+# Added route 21992cc9713e5fc5 → 127.0.0.1:3000
+# https://21992cc9713e5fc5.<id>.opentunnel.xyz
+```
+
+Routes get a random 16-character name by default. Route names never appear in
+public certificate logs, so the URL can't be guessed, but anyone you share it
+with can reach the service: it is not authentication. Pass `--name api` for a
+readable name instead.
+
+To let the application see each visitor's address, pass `--proxy-protocol v1`
+or `--proxy-protocol v2`: the client then sends a PROXY protocol header with
+the visitor's address before each connection's data. Enable it only if the
+application expects that header; see
+[docs/trust-boundary.md](docs/trust-boundary.md#proxy-protocol).
+
+See [packages/cli](packages/cli) for the full command reference.
+
+## Corporate proxies / custom CAs
+
+Behind a TLS-inspecting proxy (Zscaler, Netskope, Cato, …), the CLI trusts the
+proxy's CA when it is installed in the OS trust store; nothing to configure.
+`SSL_CERT_FILE` and `SSL_CERT_DIR` are honored. To trust a specific CA instead,
+pass `--ca-cert <path>` or set `OPENTUNNEL_CA_CERT` to a PEM file with one or
+more certificates. This only concerns the connection to `opentunnel.xyz`;
+visitor traffic is still decrypted only on your machine. An HTTP proxy in
+`HTTPS_PROXY` (or `ALL_PROXY`, minus `NO_PROXY`) carries both the API calls
+and the bridge. See
+[packages/cli](packages/cli#corporate-proxies--custom-cas) and, for the SDK,
+[packages/client](packages/client#corporate-proxies--custom-cas).
+
+## Self-hosted servers
+
+Set `OPENTUNNEL_API` to your server's URL to point the CLI and every app
+built on the SDK at it (an explicit `api` option in the SDK still wins).
+To run the server yourself, see [docs/server.md](docs/server.md#self-hosting).
+
+## Architecture
+
+The hosted service is one Rust binary, `crates/opentunnel-server`, on Fly.io
+([docs/server.md](docs/server.md)):
+
+- It accepts public TCP on 443 and reads only the TLS ClientHello. A tunnel
+  hostname (`<id>.opentunnel.xyz` or `<route>.<id>.opentunnel.xyz`) is carried,
+  still encrypted, over the tunnel's bridge WebSocket to the client that
+  claimed the route.
+- `opentunnel.xyz` itself is terminated with the server's own certificate and
+  serves the HTTP API, the bridge WebSocket, and the website.
+- Tunnel records, certificate state, and durable issuance jobs live in MySQL
+  (PlanetScale).
+- Certificates come from ZeroSSL over ACME with DNS-01 challenges in the
+  Cloudflare-hosted zone, and renew 30 days before expiry.
+- The local client owns the certificate private key, terminates TLS, and
+  forwards decrypted traffic to the local application unchanged. The
+  application sees a loopback peer and the visitor's own headers, so it must
+  not treat tunneled requests as local; see
+  [docs/trust-boundary.md](docs/trust-boundary.md). A route can opt in to a
+  PROXY protocol header carrying the visitor's address.
+
+There are two client implementations that share one protocol:
+
+| Path | What it is |
+| --- | --- |
+| `crates/opentunnel` | Rust client library and wire types, published as `opentunnel` on crates.io |
+| `crates/opentunnel-cli` | The `opentunnel` CLI and per-profile background service |
+| `crates/opentunnel-server` | The hosted service: SNI routing, bridges, API, certificates (not published) |
+| `packages/client` | TypeScript SDK (`@opentunnel/client`), compiled to JavaScript for Bun, Node, and Deno |
+| `packages/protocol` | TypeScript schemas, bridge framing, and the HTTP API contract |
+| `packages/website` | The landing page, built with Vite and served by the server |
+| `packages/cli` | npm launcher and publish script for the Rust CLI |
+
+The wire protocol and on-disk layout are specified in
+[docs/protocol.md](docs/protocol.md). Both clients are tested against the
+shared vectors in `spec/vectors`, so a change to the protocol must update the
+spec, the vectors, and both clients.
+
+## Deployment
+
+`Dockerfile` builds the server and website into one image. The reviewed
+[Fly configuration](.github/release/targets/production.toml) runs it on the
+`opentunnel` app with PlanetScale MySQL and raw TCP on ports 443 and 80.
+After CI passes on `dev`, the owner promotes that commit with
+`git push origin dev:production`. To redeploy, dispatch **Deploy to Fly** on
+`production`. See [docs/server.md](docs/server.md) for runtime configuration.
+
+## Development
+
+For a release check, run `bun run release`. For stable, commit handwritten notes
+to `docs/releases/X.Y.Z.md`, then dispatch **Release** from `dev` with `mode=stable`
+and the matching bump. The workflow computes the version from the latest stable
+tag. Only `thdxr` can start or rerun a stable publish. Configure trusted
+publishers on npm and crates.io for `anomalyco/opentunnel`, workflow
+`release.yml`, and environment `release`.
+
+```bash
+bun install
+bun run ready     # TypeScript builds and the website (dist/website)
+bun run test      # Rust and TypeScript tests
+```
+
+Run the server locally against MySQL 8 in Docker, with its insecure built-in
+test CA, serving the whole app on plain HTTP:
+
+```bash
+docker run -d --name ot-mysql -e MYSQL_ROOT_PASSWORD=opentunnel -e MYSQL_DATABASE=opentunnel -p 3306:3306 mysql:8.0
+mkdir -p .local
+DATABASE_URL=mysql://root:opentunnel@127.0.0.1:3306/opentunnel \
+  ISSUER=local LOCAL_CA_FILE=.local/local-ca.pem OPENTUNNEL_DOMAIN=localhost \
+  WEBSITE_DIR=dist/website TLS_LISTEN='[::]:8443' HTTP_LISTEN='[::]:8080' HTTP_MODE=serve \
+  cargo run -p opentunnel-server
+```
+
+The server tests use the same container: `TEST_DATABASE_URL=mysql://root:opentunnel@127.0.0.1:3306/opentunnel cargo test -p opentunnel-server`
+(without it they skip).
+
+`*.localhost` resolves to the loopback address on most systems, so tunnels are
+reachable at `https://<route>.<id>.localhost:8443` (trust
+`.local/local-ca.pem`). Point the CLI at it in a second terminal after starting
+a local HTTP application on port 4096:
+
+```bash
+export OPENTUNNEL_API=http://localhost:8080
+bun run opentunnel route add 4096
+```
+
+`bun run dev` serves the website with hot reload on `http://127.0.0.1:4190`
+and proxies `/api` to that server.
+
+## Contributing
+
+We don't accept pull requests. If you've found a bug or have an idea,
+[open an issue](https://github.com/anomalyco/opentunnel/issues/new) instead.

@@ -1,3 +1,12 @@
+## v7.1 — الدمج الضخم: OpenCode الرسمي كاملًا + حساب anomalyco 🔮
+
+- **دمج [anomalyco/opencode](https://github.com/anomalyco/opencode) الرسمي كاملًا** (باستثناء موقع التسويق services/site): محرك الوكيل الأساسي `packages/core`، طبقة الذكاء `packages/ai`، الواجهات TUI/App/GUI/Session-UI، وكمان إصدار Rust `cli-rs`.
+- **OpenCode للأندرويد** (`anomalyco/opencode-android`) كاملًا — مرجع مباشر لتطبيق مشابه.
+- **24 مشروعًا مرافقًا من حساب anomalyco**: opencode-console-cli, opencode-pty, opencode-sdk-go, opencode-voice, opencode-zed-extension, oc-plugin-rainbow, opencode-plugin-lane, opencode-bench, opencode-beta, opentunnel, opentui-index, provider, extension, agents-benchmark, computer-use, terminal-control, phonecall, radiant, rift, haunt, fiend وغيرها.
+- **المكتبة داخل التطبيق الآن: 102 مشروعًا / 33,955 ملفًا / ~263MB** من المعرفة المفتوحة — كلها تصفّح من شاشة المكتبة وتصل فريق الأبطال كمرجع.
+- **دمج ملف المستخدم `AI (1).py`** (بوت تليجرام GigaChat + DeepAI متعدد الأنماط) في مصادر التطبيق كملف `21_ai_giga_deepai_bot.py` مع فحص أمان (لا مفاتيح مضمّنة — يستخدم متغيرات بيئة).
+- **ملاحظات صريحة**: (1) الملف التنفيذي `opencode-linux-arm64-musl.tar.gz` ثنائي لينكس — لا يعمل على أندرويد ولا يُدمج في APK. (2) المستودعات غير المرتبطة بـ OpenCode (rune, hex, nightmail, textjs, isocast, sst, v2, guide...) لم تُدمج نصيًا كاملة لأن مجموع النصوص (~420MB) كان سيدفع APK فوق حد GitHub الصارم 100MB للملف الواحد — الأولوية كانت لمنظومة OpenCode كاملة، وأيها موجودة ضمن المشاريع الصغيرة المدمجة.
+
 ## v7.0 — OpenCode Zen الرسمي مجانًا + دمج مكتبة lingling 🔮
 
 - **OpenCode Zen داخل التطبيق رسميًا**: مزوّدان جاهزان في مركز المفاتيح:

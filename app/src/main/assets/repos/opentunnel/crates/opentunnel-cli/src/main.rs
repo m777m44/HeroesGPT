@@ -1,0 +1,369 @@
+#[cfg(not(unix))]
+compile_error!("opentunnel-cli currently supports Unix platforms only");
+
+mod config;
+mod control;
+mod daemon;
+mod private;
+mod service;
+
+use std::io::{IsTerminal, Write};
+
+use anyhow::{Context, Result, bail};
+use clap::{Parser, Subcommand};
+use opentunnel::protocol::names;
+use opentunnel::{Client, ClientOptions, ProvisionStage};
+
+use crate::control::{DaemonStatus, Phase};
+
+#[derive(Parser)]
+#[command(
+    name = "opentunnel",
+    version,
+    about = "Create and manage blind TLS tunnels"
+)]
+struct Cli {
+    /// Profile name. Each profile owns one tunnel.
+    #[arg(
+        long,
+        global = true,
+        default_value = "default",
+        env = "OPENTUNNEL_PROFILE"
+    )]
+    profile: String,
+
+    /// API base URL.
+    #[arg(long, global = true, env = "OPENTUNNEL_API", hide = true)]
+    api: Option<String>,
+
+    /// PEM file of extra CA certificates to trust for opentunnel.xyz, for
+    /// TLS-inspecting proxies. The OS trust store is already used.
+    #[arg(long, global = true, env = "OPENTUNNEL_CA_CERT", value_name = "PATH")]
+    ca_cert: Option<std::path::PathBuf>,
+
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Connect this device: create the tunnel if needed and run the service,
+    /// starting it at login where systemd or launchd is available.
+    Up,
+    /// Disconnect: stop the service and stop starting it at login.
+    Down,
+    /// Show the tunnel, its routes, and the connection.
+    Status,
+    /// Manage subdomain routes.
+    #[command(subcommand)]
+    Route(RouteCommand),
+    /// Run the service in the foreground (containers, debugging).
+    Serve,
+    /// Delete the tunnel for good, losing its hostname.
+    Delete {
+        /// Confirm deletion.
+        #[arg(long)]
+        yes: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum RouteCommand {
+    /// Add a route and bring the tunnel up. The target is a port or host:port.
+    /// Without --name the route gets a random 16-character name, so its URL
+    /// can't be guessed; adding the same target again keeps that route.
+    /// Adding an existing route again with different options (or, with
+    /// --name, a different target) updates it.
+    Add {
+        /// The local service: a port (3000) or host:port (127.0.0.1:3000).
+        target: String,
+        /// Name the route yourself instead (one lowercase DNS label), or `@` for
+        /// the tunnel hostname itself. Readable names are guessable.
+        #[arg(long)]
+        name: Option<String>,
+        /// Send a PROXY protocol header (v1 text or v2 binary) with the
+        /// visitor's address before each connection's data. Only enable it if
+        /// the target expects one: it rejects or misreads connections otherwise.
+        #[arg(long, value_name = "v1|v2", value_parser = config::parse_proxy_protocol)]
+        proxy_protocol: Option<opentunnel::ProxyProtocol>,
+        /// Old form: `route add <name> <target>`.
+        #[arg(hide = true)]
+        legacy_target: Option<String>,
+    },
+    /// Remove a route.
+    Remove { name: String },
+    /// List routes.
+    List,
+}
+
+fn main() -> Result<()> {
+    // Exit quietly when stdout closes early (for example `opentunnel info | head`).
+    // SAFETY: restoring the default SIGPIPE handler before any threads start.
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+    let cli = Cli::parse();
+    let daemon = matches!(cli.command, Commands::Serve);
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| if daemon { "info" } else { "warn" }.into()),
+        )
+        .with_writer(std::io::stderr)
+        .with_ansi(std::io::stderr().is_terminal())
+        .init();
+    tokio::runtime::Runtime::new()?.block_on(run(cli))
+}
+
+async fn run(cli: Cli) -> Result<()> {
+    if !names::is_valid_profile(&cli.profile) {
+        bail!("profile names must contain only lowercase letters, numbers, and hyphens");
+    }
+    private::tighten(&cli.profile);
+    let ca_cert = cli
+        .ca_cert
+        .as_deref()
+        .map(|path| {
+            opentunnel::tls::read_ca_certificates(path)?;
+            std::path::absolute(path).context("resolving --ca-cert")
+        })
+        .transpose()?;
+    // Global options the background service is started with.
+    let mut service_args = Vec::new();
+    if let Some(api) = &cli.api {
+        service_args.extend(["--api".to_owned(), api.clone()]);
+    }
+    if let Some(ca_cert) = &ca_cert {
+        service_args.extend(["--ca-cert".to_owned(), ca_cert.display().to_string()]);
+    }
+    let client = Client::new(ClientOptions {
+        api: cli
+            .api
+            .as_deref()
+            .map(|api| api.parse().context("invalid --api URL"))
+            .transpose()?,
+        storage: None,
+        ca_cert,
+    });
+    let profile = cli.profile.as_str();
+
+    match cli.command {
+        Commands::Up => {
+            let hostname = up(&client, profile, &service_args).await?;
+            println!("Connected https://{hostname}");
+            if config::load(profile)?.routes.is_empty() {
+                println!("Add a route with: opentunnel route add <port>");
+            }
+            Ok(())
+        }
+        Commands::Down => {
+            if service::down(profile).await? {
+                println!("Disconnected profile {profile}.");
+            } else {
+                println!("Profile {profile} is not connected.");
+            }
+            Ok(())
+        }
+        Commands::Status => status(&client, profile).await,
+        Commands::Route(command) => route(&client, profile, command, &service_args).await,
+        Commands::Serve => daemon::serve(client, profile.to_owned()).await,
+        Commands::Delete { yes } => {
+            if !yes {
+                bail!("this deletes the tunnel and its hostname; rerun with --yes to confirm");
+            }
+            service::down(profile).await?;
+            client.remove(profile).await?;
+            println!("Deleted the tunnel for profile {profile}.");
+            Ok(())
+        }
+    }
+}
+
+/// Ensures the profile has a tunnel and the service is running. Returns the hostname.
+async fn up(client: &Client, profile: &str, service_args: &[String]) -> Result<String> {
+    let identity = match client.get(profile)? {
+        Some(identity) => identity,
+        None => create(client, profile).await?,
+    };
+    service::up(profile, service_args).await?;
+    Ok(identity.hostname)
+}
+
+async fn create(client: &Client, profile: &str) -> Result<opentunnel::Identity> {
+    let waiting = std::cell::Cell::new(false);
+    let progress = |stage: ProvisionStage| {
+        let mut stdout = std::io::stdout();
+        if stage == ProvisionStage::WaitingCertificate {
+            if waiting.replace(true) {
+                print!(".");
+            } else {
+                print!("Waiting for certificate verification (this can take a few minutes)...");
+            }
+            let _ = stdout.flush();
+            return;
+        }
+        if waiting.replace(false) {
+            println!();
+        }
+        let message = match stage {
+            ProvisionStage::CreatingTunnel => "Creating tunnel...",
+            ProvisionStage::GeneratingKey => "Generating private key...",
+            ProvisionStage::GeneratingCsr => "Generating certificate request...",
+            ProvisionStage::ResumingCertificate => "Resuming pending certificate verification...",
+            ProvisionStage::RequestingCertificate => "Requesting certificate...",
+            ProvisionStage::SavingIdentity => "Saving tunnel identity...",
+            ProvisionStage::Ready => "Tunnel is ready.",
+            ProvisionStage::WaitingCertificate => unreachable!(),
+        };
+        println!("{message}");
+    };
+    let identity = client.create(profile, progress).await;
+    if waiting.get() {
+        println!();
+    }
+    identity.map_err(Into::into)
+}
+
+async fn status(client: &Client, profile: &str) -> Result<()> {
+    println!("Profile: {profile}");
+    let hostname = if let Some(identity) = client.get(profile)? {
+        println!("Tunnel ID: {}", identity.id);
+        println!("Hostname: {}", identity.hostname);
+        println!("Certificate expiry: {}", identity.certificate_expiry);
+        Some(identity.hostname)
+    } else if let Some(pending) = client.pending(profile)? {
+        println!("Tunnel ID: {}", pending.id);
+        println!("Hostname: {}", pending.hostname);
+        println!("Status: waiting for certificate verification");
+        Some(pending.hostname)
+    } else {
+        println!("No tunnel exists for this profile. Create one with: opentunnel up");
+        None
+    };
+    println!();
+    print_routes(profile, hostname.as_deref())?;
+    println!();
+    print_service(profile, service::status(profile).await.as_ref());
+    Ok(())
+}
+
+fn print_routes(profile: &str, hostname: Option<&str>) -> Result<()> {
+    let routes = config::load(profile)?.routes;
+    if routes.is_empty() {
+        println!("No routes configured.");
+        return Ok(());
+    }
+    let display: Vec<(String, &opentunnel::Route)> = routes
+        .iter()
+        .map(|(name, target)| {
+            let public = match hostname {
+                Some(hostname) => config::public_hostname(name, hostname),
+                None => name.clone(),
+            };
+            (public, target)
+        })
+        .collect();
+    let width = display
+        .iter()
+        .map(|(public, _)| public.len())
+        .max()
+        .unwrap_or(0);
+    for (public, target) in display {
+        println!("{public:width$}  →  {target}");
+    }
+    Ok(())
+}
+
+fn print_service(profile: &str, status: Option<&DaemonStatus>) {
+    let Some(status) = status else {
+        println!("Service: stopped (connect with: opentunnel up)");
+        return;
+    };
+    let phase = match status.phase {
+        Phase::NoTunnel => "running, waiting for a tunnel".to_owned(),
+        Phase::Provisioning => "running, waiting for certificate verification".to_owned(),
+        Phase::Stopped => "running, tunnel stopped after an error".to_owned(),
+        Phase::Running => match &status.tunnel {
+            Some(tunnel) => match tunnel.state.as_str() {
+                "connected" => format!("connected, {} active connection(s)", tunnel.connections),
+                "waiting-routes" => "running, waiting for routes".to_owned(),
+                state => state.replace('-', " "),
+            },
+            None => "running".to_owned(),
+        },
+    };
+    println!("Service: {phase} (pid {}, profile {profile})", status.pid);
+    println!("Log: {}", control::paths(profile).log.display());
+    if let Some(error) = status
+        .tunnel
+        .as_ref()
+        .and_then(|tunnel| tunnel.last_error.as_ref())
+        .or(status.last_error.as_ref())
+    {
+        println!("Last error: {error}");
+    }
+}
+
+async fn route(
+    client: &Client,
+    profile: &str,
+    command: RouteCommand,
+    service_args: &[String],
+) -> Result<()> {
+    let hostname = client.get(profile)?.map(|identity| identity.hostname);
+    let public = |name: &str| match &hostname {
+        Some(hostname) => config::public_hostname(name, hostname),
+        None => name.to_owned(),
+    };
+    match command {
+        RouteCommand::Add {
+            target,
+            name,
+            proxy_protocol,
+            legacy_target,
+        } => {
+            let (name, target) = match legacy_target {
+                Some(legacy) => {
+                    if name.is_some() {
+                        anyhow::bail!(
+                            "give the route name either with --name or before the target, not both"
+                        );
+                    }
+                    eprintln!(
+                        "note: `route add <name> <target>` is now `route add <target> --name <name>`"
+                    );
+                    (Some(target), legacy)
+                }
+                None => (name, target),
+            };
+            let route = opentunnel::Route::new(config::normalize_target(&target))
+                .with_proxy_protocol(proxy_protocol);
+            let mut config = config::load(profile)?;
+            let (name, change) = config::choose_route(&config.routes, &route, name.as_deref())?;
+            if change != config::Change::Unchanged {
+                config.routes.insert(name.clone(), route.clone());
+                config::save(profile, &config)?;
+            }
+            let hostname = up(client, profile, service_args).await?;
+            match change {
+                config::Change::Added => println!("Added route {name} → {route}"),
+                config::Change::Unchanged => println!("Route {name} → {route} already exists"),
+                config::Change::Updated(previous) => {
+                    println!("Updated route {name} → {route} (was {previous})");
+                }
+            }
+            println!("https://{}", config::public_hostname(&name, &hostname));
+        }
+        RouteCommand::Remove { name } => {
+            let mut config = config::load(profile)?;
+            if config.routes.remove(&name).is_none() {
+                bail!("no route named '{name}' in profile {profile}");
+            }
+            config::save(profile, &config)?;
+            service::reload_if_running(profile).await?;
+            println!("Removed route {}", public(&name));
+        }
+        RouteCommand::List => print_routes(profile, hostname.as_deref())?,
+    }
+    Ok(())
+}

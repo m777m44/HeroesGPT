@@ -1,0 +1,26 @@
+{
+  "name": "radiant",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --cwd packages/worker dev",
+    "typecheck": "tsc --noEmit && bun run --filter '*' typecheck",
+    "test": "bun test packages/core/test packages/worker/test",
+    "check": "bun run typecheck && bun run test && bun run --cwd packages/worker build:check",
+    "db:generate": "bunx drizzle-kit generate --config=drizzle.config.ts",
+    "db:migrate": "bun packages/database/src/migrate.ts",
+    "db:studio": "bunx drizzle-kit studio --config=drizzle.config.ts",
+    "deploy:dev": "bun run --cwd packages/worker deploy:dev",
+    "deploy:production": "bun run --cwd packages/worker deploy:production"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20261112.1",
+    "@types/bun": "1.4.4",
+    "cf": "1.0.0-beta.12",
+    "drizzle-kit": "1.0.0-beta.18-7eb39f0",
+    "typescript": "5.9.3"
+  }
+}

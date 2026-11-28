@@ -1,0 +1,317 @@
+# OpenTunnel Protocol
+
+This document is the source of truth for the two client implementations:
+the Rust crates in `crates/` and the TypeScript SDK in `packages/client`.
+Both are tested against the shared vectors in `spec/vectors`.
+
+## HTTP API
+
+Base URL: `https://opentunnel.xyz`. Authenticated endpoints use
+`Authorization: Bearer <token>`. Errors are JSON objects with a `_tag` and a
+`message`.
+
+| Method | Path | Auth | Request | Success |
+| --- | --- | --- | --- | --- |
+| `POST` | `/api/tunnel` | none | `{}` | `201 { "tunnel": TunnelInfo, "token": string }` |
+| `GET` | `/api/tunnel/:id` | bearer | | `200 TunnelInfo` |
+| `POST` | `/api/tunnel/:id/certificate` | bearer | `{ "csr": string }` | `202 CertificateInfo` |
+| `GET` | `/api/tunnel/:id/certificate` | bearer | | `200 CertificateInfo` |
+| `DELETE` | `/api/tunnel/:id` | bearer | | `204` |
+| `GET` | `/api/tunnel/:id/connect` | in-band | WebSocket upgrade | `101` |
+
+```ts
+type TunnelInfo = {
+  id: string
+  hostname: string            // "<id>.opentunnel.xyz"; id is 12 random base32 characters
+  state: "offline" | "online"
+  certificateID?: string
+}
+
+type CertificateInfo = {
+  id: string
+  state:
+    | { type: "challenge"; token: string; key: string }
+    | { type: "issuing" }
+    | { type: "ready"; certificate: string; chain: string; expiry: string }
+    | { type: "failed"; reason: string }
+}
+```
+
+### Retries and errors
+
+The hosted API sits behind Cloudflare, so a request can fail before it reaches
+the server: Cloudflare answers `520`-`527` with an HTML page (`525`: the TLS
+handshake between Cloudflare and the server failed, for example while a
+machine restarts). Clients retry transient failures with exponential backoff:
+retry `n` (from 0) waits a random time between half of and all of
+`min(250 ms × 2ⁿ, 8 s)`, or `Retry-After` seconds (at most 8 s) when the
+response has one, for at most 6 retries. What counts as transient depends on
+whether the request may be repeated:
+
+| Requests | Retried on |
+| --- | --- |
+| `GET` (tunnel, certificate), `POST /api/tunnel/:id/certificate` (binding the CSR a tunnel already has answers with its current certificate) | network errors, `429`, any `5xx` |
+| `POST /api/tunnel`, `DELETE /api/tunnel/:id` | failures where the request cannot have arrived: no connection, `429`, `503`, `521`, `522`, `523`, `525` |
+
+Every other response fails at once. An error response without a JSON error
+body is reported with its status, and for Cloudflare's codes with their
+meaning: `Cloudflare 525: the SSL handshake with the server failed (HTTP
+525)`. `spec/vectors/api-retry.json` lists the delays, the statuses and the
+messages.
+
+The hosted service limits what one client can make it do on the shared ACME
+account: creating tunnels per client address, and binding a new CSR (not the
+one the tunnel already has) per tunnel. Over a limit it answers `429` with
+`Retry-After` (seconds) and `{"_tag":"RateLimitedError","message":"..."}`;
+while too much certificate issuance is queued, creating a tunnel or binding a
+new CSR answers `503` (`ServiceUnavailableError`) with `Retry-After`. Both are
+retried as above and then reported with their message; a `Retry-After` beyond
+8 s is not waited for. The limits are the server's
+([server.md](server.md#limits)).
+
+When a client with a saved identity checks its certificate before connecting
+and the check still fails transiently after the retries, it keeps using the
+saved certificate if it has not expired. The bridge WebSocket reconnects with
+its own backoff ([Reconnect](#reconnect)).
+
+## Provisioning
+
+1. `POST /api/tunnel` returns the tunnel and its token. The token is shown once.
+2. The client generates a P-256 key locally and a PKCS#10 CSR with
+   `CN=<hostname>` and SANs `<hostname>` and `*.<hostname>`, signed with
+   ECDSA SHA-256.
+3. The client persists the pending identity (id, hostname, token, private key,
+   CSR) before calling `POST /api/tunnel/:id/certificate`, so an interrupted
+   provision can resume.
+4. The client polls `GET /api/tunnel/:id/certificate` every 2 seconds until
+   the state is `ready` or `failed`.
+
+## Renewal
+
+The server renews certificates; clients never need to submit a new CSR.
+
+- A renewal reuses the CSR stored at provisioning, so the key never changes
+  and the server never sees it.
+- The server keeps a renewal alarm per tunnel for 30 days before expiry. When
+  it fires, the tunnel is renewed if a client connected in the last 90 days;
+  otherwise the certificate is left to expire.
+- When a client attaches and the certificate is within 30 days of expiry (or
+  already expired), the server starts a renewal immediately.
+- During a renewal, `GET /api/tunnel/:id/certificate` keeps returning the
+  current certificate. It switches to the new one once issued.
+- Clients check `GET /api/tunnel/:id/certificate` when connecting and then
+  every 12 hours, or every minute while their certificate is within 30 days of
+  expiry. A newer certificate is saved locally and used for new connections
+  without disconnecting.
+
+## Bridge
+
+The bridge is one WebSocket per client session, using the `opentunnel`
+subprotocol, at `wss://<api host>/api/tunnel/:id/connect`.
+
+### Frames
+
+- Text frames carry JSON control messages.
+- Binary frames carry connection data: a big-endian `u32` connection ID
+  followed by payload bytes. Payloads must not exceed 32 KiB.
+- The server closes a session with `1009` when a message is larger than
+  64 KiB before `attach`, or larger than a data frame with a 32 KiB payload
+  after it.
+
+### Control messages
+
+Client to server:
+
+| `type` | Fields |
+| --- | --- |
+| `attach` | `token`, `transport: "ws"`, `routes: string[]`, `client: { version, max_conns }` |
+| `ping` / `pong` | `time_sent` (milliseconds) |
+| `end` | `conn` |
+| `reset` | `conn`, `code` |
+
+Server to client:
+
+| `type` | Fields |
+| --- | --- |
+| `attached` | `session`, `routes`, `heartbeat_ms`, `idle_timeout_ms` |
+| `attach_error` | `code` |
+| `open` | `conn`, `peer`, `sni`, `alpn` |
+| `ping` / `pong` | `time_sent` |
+| `drain` | `reason` |
+| `end` | `conn` |
+| `reset` | `conn`, `code` |
+
+Unknown message types and unknown fields must be ignored.
+
+### Versioning
+
+Additive changes (new optional fields, new message types) need no version
+change, because clients ignore what they do not understand.
+
+Changes both sides must agree on get a new WebSocket subprotocol name:
+`opentunnel` is version 1, and the next would be `opentunnel.v2`. A client
+offers every version it supports, newest first (for example
+`opentunnel.v2, opentunnel`), and the server selects the newest it supports.
+The server keeps accepting older versions so installed clients keep working.
+
+### Session
+
+1. The client opens the WebSocket and sends `attach` within 10 seconds; the
+   server closes sessions that do not with `1008`.
+2. The server replies `attached` or `attach_error` and closes.
+   `bad_token` and `cert_not_ready` are fatal. Other errors, including
+   `route_conflict` and `too_many_routes`, may be retried. An `attach` claims
+   at most 128 routes, and all bridges of a tunnel together at most 256
+   (`too_many_routes`).
+3. For each public TCP connection the server sends `open`, then binary frames
+   for that `conn`, starting with the TLS ClientHello.
+4. The client resolves the route from `sni`, terminates TLS with the tunnel
+   certificate, and connects to the route target. If no route matches it
+   sends `reset` with `unknown_route`. If it already holds the `max_conns`
+   it advertised on attach, it sends `reset` with `too_many_connections`.
+   The server enforces `max_conns` too (at most 256 per bridge): it closes
+   public connections beyond it without sending `open`.
+5. Either side sends `end` to half-close a connection and `reset` to abort it.
+6. The client sends `ping` every `heartbeat_ms` and closes the session when
+   nothing is received for `idle_timeout_ms`. The server may send `ping`
+   (while it is not reading, see [Backpressure](#backpressure)); the client
+   answers `pong` with the same `time_sent`.
+
+### Routes
+
+A route name is `@` (the tunnel hostname itself) or one DNS label matching
+`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`. A connection with SNI `api.<hostname>`
+uses route `api`; SNI `<hostname>` uses route `@`. Deeper names never match.
+
+Route targets are `host:port` without a scheme.
+
+### Route options
+
+A route is either its target alone or a target with options. Without options
+the client copies the decrypted bytes unchanged in both directions. Options are
+local to the client: they change nothing on the bridge or the server.
+
+| Option | Profile config | SDK | Values |
+| --- | --- | --- | --- |
+| PROXY protocol | `proxy_protocol` | `proxyProtocol` | `"v1"` or `"v2"` |
+
+Clients reject unknown option keys, unknown values, and a missing `target`.
+
+#### PROXY protocol
+
+With `proxy_protocol`, the client writes a [PROXY protocol][proxy-protocol]
+header to the new TCP connection to the target, before any payload, then copies
+the decrypted bytes unchanged in both directions. It never reads or alters the
+payload, so this works for every protocol inside TLS. The header is built from
+the `open` frame:
+
+- **Source**: the visitor, parsed from `peer`. `peer` is `ipv4:port`,
+  `[ipv6]:port`, or a bare address (taken as port 0). IPv4-mapped IPv6
+  addresses (`::ffff:a.b.c.d`) are sent as IPv4.
+- **Destination**: the unspecified address of the source's family (`0.0.0.0`
+  or `::`) on port `443`, the public port every visitor connected to. The
+  client does not know which public address the visitor reached, and the
+  target is often a hostname, so neither is used.
+- **v1**: one text line, IPv6 written in RFC 5952 form:
+  `PROXY TCP4 203.0.113.9 0.0.0.0 51234 443\r\n` or
+  `PROXY TCP6 2001:db8::1 :: 51234 443\r\n`. When `peer` does not parse:
+  `PROXY UNKNOWN\r\n`.
+- **v2**: the binary header with the `PROXY` command over `TCP4` or `TCP6`
+  (`0x21 0x11` / `0x21 0x21`), followed by a `PP2_TYPE_AUTHORITY` (`0x02`) TLV
+  holding `sni`, the hostname the visitor asked for (omitted when empty or
+  longer than 255 bytes). When `peer` does not parse: the `LOCAL` command with
+  family `UNSPEC` (`0x20 0x00`), no addresses, and the same TLV.
+
+`spec/vectors/proxy-protocol.json` lists peer parsing and exact headers.
+
+[proxy-protocol]: https://www.haproxy.org/download/2.9/doc/proxy-protocol.txt
+
+### Multiple clients
+
+A tunnel is one hostname per device, shared by every client on it: the CLI's
+background service and any number of apps using the SDK. Each client opens
+its own bridge with the same token and attaches with the routes it handles.
+
+- The server routes each connection to the bridge that claimed its route.
+- A route belongs to one bridge at a time. A bridge that claims a route
+  already held by another is rejected with `route_conflict` and retries with
+  backoff, so it takes over once the other bridge goes away (for example when
+  an app restarts). `attach_error` does not say which route is held. A client
+  may let its user stop on the first conflict instead (the SDK's
+  `onRouteConflict: "fail"`).
+- The server treats a bridge it has not heard from for `idle_timeout_ms` plus
+  `heartbeat_ms` as gone, even if its socket never closed: it stops routing
+  connections to it, resets the connections it had, closes it with `1001`, and
+  releases its routes.
+- Each client reads the same identity from local storage and terminates TLS
+  itself.
+
+### Reconnect
+
+Clients reconnect after a non-fatal close with exponential backoff from 250 ms
+to 30 s with jitter, resetting after a successful attach.
+
+### Backpressure
+
+Clients bound the bytes queued on the WebSocket and stop reading from local
+sockets until the queue drains. There is no per-connection flow control on
+the wire yet. The server holds at most 512 KiB of data for one connection
+and 4 MiB for one bridge's connections; beyond that it stops reading the
+bridge until visitors take data, for at most 5 s per frame, and then sends
+`reset` (`client_io_error`) for every connection whose visitor took nothing
+in that time. A slow public reader can thus delay other connections that
+share the bridge, but a stalled one cannot hold it.
+
+Because the server may pause reading, a client's read loop must never wait
+on its own send queue: control messages it answers or sends (`pong`, `ping`,
+`reset`) must not queue behind connection data, and a full local connection
+may hold the read loop only briefly (the Rust client waits at most 5 s, the
+SDK never waits and resets beyond a byte budget; both send `reset` with
+`upstream_io_error`). Otherwise the client stops reading the bridge
+while the server waits, and the server's write timeout closes it.
+
+## Local storage
+
+Both clients read and write the same layout.
+
+```text
+$XDG_DATA_HOME/opentunnel/<profile>/    (0700)
+  tunnel.json       { "id", "hostname", "certificateExpiry" }
+  pending.json      { "id", "hostname", "csr" }    while provisioning
+  token             (0600)
+  private-key.pem   (0600, PKCS#8)
+  certificate.pem
+  chain.pem
+```
+
+Profile names match `^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`.
+
+### Route config
+
+The CLI keeps each profile's routes in `$XDG_CONFIG_HOME/opentunnel/<profile>.toml`
+(0600, in a 0700 directory). Route names are the only secret in a route's URL,
+so the config, and the CLI service's log under
+`$XDG_STATE_HOME/opentunnel/<profile>/` (0700; `daemon.log` and
+`last-error.json` are 0600, and the log records route names with visitor
+addresses), must be readable only by their owner. Writers create them that way
+and remove group and other access from existing ones.
+A route is a `host:port` string, or a table with `target` and options
+([Route options](#route-options)):
+
+```toml
+[routes]
+web = "127.0.0.1:3000"
+api = { target = "127.0.0.1:4000", proxy_protocol = "v2" }
+```
+
+A `[routes.api]` sub-table is read the same way. Unknown keys and values are
+errors. Writers emit one line per route, sorted by name: the plain string when
+a route has no options, otherwise an inline table with `target` first, so a
+config without options is written exactly as before. CLIs older than 0.5.0
+cannot read the table form. `spec/vectors/route-options.json` lists valid and
+invalid routes and configs.
+
+The SDK takes routes from the app in the same shape (`proxyProtocol` instead of
+`proxy_protocol`) and does not read or write this file: the CLI's service
+claims the routes listed there, so an app writing to it would compete with the
+service for them.

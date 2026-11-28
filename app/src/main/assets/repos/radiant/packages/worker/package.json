@@ -1,0 +1,23 @@
+{
+  "name": "@radiant/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bunx cf dev --mode dev",
+    "typecheck": "tsc --noEmit",
+    "build:check": "bunx cf deploy --dry-run --mode dev",
+    "deploy:dev": "bunx cf deploy --mode dev",
+    "deploy:production": "bunx cf deploy --mode production"
+  },
+  "dependencies": {
+    "@radiant/core": "workspace:*",
+    "@radiant/database": "workspace:*",
+    "effect": "4.1.2"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "2.0.0-beta.v.4",
+    "@cloudflare/workers-types": "5.20261112.1",
+    "vite": "8.1.3"
+  }
+}

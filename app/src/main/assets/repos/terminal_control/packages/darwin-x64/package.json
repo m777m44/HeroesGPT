@@ -1,0 +1,25 @@
+{
+  "name": "@kitlangton/terminal-control-darwin-x64",
+  "version": "1.2.1",
+  "description": "Native termctrl binary for Terminal Control on macOS x64",
+  "license": "MIT",
+  "repository": "https://github.com/anomalyco/terminal-control",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin/termctrl",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_LICENSES.md"
+  ],
+  "bin": {
+    "termctrl": "bin/termctrl"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

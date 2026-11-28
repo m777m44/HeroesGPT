@@ -1,0 +1,119 @@
+import { useState } from "react"
+import { TunnelScene } from "./scenes/TunnelScene"
+import { TunnelArt } from "./poster/TunnelArt"
+import { Globe } from "./scenes/Globe"
+import { useTime, useTransform } from "motion/react"
+import { Caption, Wordmark } from "./wordmark"
+import { Justified } from "./Justified"
+import { Ink } from "./Ink"
+import { Splatter } from "./Splatter"
+import signature from "./footer-signature.svg"
+
+const github = "https://github.com/anomalyco/opentunnel"
+
+const installs = {
+  curl: "curl -fsSL https://opentunnel.xyz/install | sh",
+  brew: "brew install anomalyco/tap/opentunnel",
+  arch: "yay -S opentunnel-bin",
+  npm: "npm i -g opentunnel",
+  cargo: "cargo install opentunnel-cli",
+} as const
+type Manager = keyof typeof installs
+
+function Install() {
+  const [manager, setManager] = useState<Manager>("curl")
+  return <div className="install">
+    <div className="tabs" role="tablist">
+      {(Object.keys(installs) as Manager[]).map(name => <button key={name} type="button" role="tab" aria-selected={manager === name} data-current={manager === name || undefined} onClick={() => setManager(name)}>{name}</button>)}
+      <a href={github} target="_blank" rel="noopener">github</a>
+    </div>
+    <div className="command">$ {installs[manager]}</div>
+  </div>
+}
+
+/** The print in a square the mark's height, the mark beside it, and under the square the caption. */
+function Masthead() {
+  const seconds = useTransform(useTime(), ms => ms / 1000)
+  return <div className="masthead">
+    <div className="masthead-print" role="img" aria-label="A tunnel"><TunnelArt className="masthead-canvas" /></div>
+    <Wordmark className="wordmark" />
+    <Splatter />
+    <h1><Caption globe={<Globe clock={seconds} size={11} className="tail" />} /></h1>
+  </div>
+}
+
+const out = (text: string) => <span className="output">{text}</span>
+
+export function App() {
+  return <div className="site">
+    <Ink />
+
+    <main>
+      <Masthead />
+
+      <div className="diagram-wrap"><div className="diagram"><TunnelScene /></div></div>
+
+      <Justified className="description" text="a cli and sdk to create end-to-end encrypted public urls for apps running on your machine reachable from anywhere in the world" />
+
+      <Install />
+
+      <section className="usage">
+        <h2>cli</h2>
+        <pre>{`$ opentunnel route add 47365\n`}{out("creating tunnel... tunnel is ready.\nadded route 3e9b1c07a4d25f86 → 127.0.0.1:47365\nhttps://3e9b1c07a4d25f86.f7a2mx4kq9vn.opentunnel.xyz")}{`\n\n$ curl https://3e9b1c07a4d25f86.f7a2mx4kq9vn.opentunnel.xyz\n`}{out("hello from localhost:47365")}</pre>
+      </section>
+
+      <section className="sdk">
+        <h2>sdk</h2>
+        <pre>{`// bun add @opentunnel/client
+import { create } from "@opentunnel/client"
+
+const client = create()
+const connection = await client.tunnel.connect({
+  routes: { opencode: "127.0.0.1:47365" },
+})
+
+console.log(\`https://opencode.\${connection.tunnel.hostname}\`)
+`}{out("https://opencode.f7a2mx4kq9vn.opentunnel.xyz")}</pre>
+      </section>
+
+      <section className="how">
+        <h2>how it works</h2>
+        <ol className="steps">
+          <li><Justified text="your first route creates a tunnel: a random hostname, and a private key generated on your machine. the key never leaves it." /></li>
+          <li><Justified text="the cli sends a certificate request for that hostname. a certificate is issued and bound to your tunnel name. the relay only ever sees the public half, and renews the certificate for the same key before it expires." /></li>
+          <li><Justified text="a service on your machine keeps an encrypted bridge open to the relay. apps using the sdk share the same tunnel, each with its own routes." /></li>
+          <li><Justified text="visitors hit your public url. the relay reads only the hostname from the tls handshake and forwards the encrypted stream through the bridge." /></li>
+          <li><Justified text="your machine terminates tls with its private key and proxies the traffic to your local apps." /></li>
+        </ol>
+      </section>
+
+      <section className="privacy">
+        <h2>privacy</h2>
+        <dl className="privacy-list">
+          <div>
+            <dt>the relay can't read your traffic</dt>
+            <Justified as="dd" text="connections are routed by the hostname in the tls handshake. the bytes stay encrypted until they reach your machine. the relay has no key to decrypt them." />
+          </div>
+          <div>
+            <dt>your tunnel hostname is public</dt>
+            <Justified as="dd" text="anyone with your url can reach your services. when a tunnel is created, its certificate is published to certificate transparency logs, so the hostname is discoverable by anyone watching them." />
+          </div>
+          <div>
+            <dt>route names are private, not secret</dt>
+            <Justified as="dd" text="the certificate is a wildcard, so route names never appear in any log. they are still guessable, especially common names like api or postgres, so don't treat them as authentication." />
+          </div>
+          <div>
+            <dt>put auth in the services themselves</dt>
+            <Justified as="dd" text="anything sensitive behind a tunnel should authenticate on its own." />
+          </div>
+        </dl>
+      </section>
+    </main>
+    <footer className="site-footer">
+      <div className="copyright">
+        <img src={signature} alt="" aria-hidden="true" width={163} height={64} />
+        <p>©2026 <a href="https://anoma.ly">anomaly</a>. all rights reserved</p>
+      </div>
+    </footer>
+  </div>
+}

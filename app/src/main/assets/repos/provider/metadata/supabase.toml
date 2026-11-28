@@ -1,0 +1,3 @@
+name = "supabase"
+terraform = "registry.terraform.io/supabase/supabase"
+version = "1.4.1"

@@ -1,0 +1,67 @@
+# @opentunnel/protocol
+
+## 0.6.2
+
+## 0.6.1
+
+## 0.6.0
+
+### Minor Changes
+
+- 0b080e4: SDK additions for CLIs that wrap dev servers (#56): `connect({ signal })` now cancels an attach in progress (and the certificate work it started) and rejects with the signal's reason; `onRouteConflict: "fail"` makes `connect` reject with `code: "route_conflict"` instead of retrying, and a `route-conflict` event reports each conflict (see it before `connect` resolves with the new `onEvent` option); `connection.urls` maps each route to its public URL; `isValidRouteName`, `ROUTE_LABEL_PATTERN`, `ROOT_ROUTE`, and `publicUrl` are exported; `ensure({ onProgress })` reports progress, starting with the new `checking-certificate` stage. Fatal attach errors carry their code on `OpenTunnelClientError.code`. The protocol package exports `Names.LABEL_PATTERN` and `Names.publicHostname`.
+
+## 0.5.5
+
+## 0.5.4
+
+## 0.5.3
+
+## 0.5.2
+
+## 0.5.1
+
+### Patch Changes
+
+- 4f5a5d7: API requests survive brief outages of the hosted API, such as Cloudflare answering 525 while a server restarts. The CLI and the SDK retry network errors, 429 and 5xx (including Cloudflare's 520-527) with capped exponential backoff: reads and certificate requests on any transient failure, creating or deleting a tunnel only when the request cannot have arrived. Errors now name the HTTP status and, for Cloudflare's codes, what they mean (`Failed to read certificate: Cloudflare 525: the SSL handshake with the server failed (HTTP 525)` instead of `Failed to read certificate`), and a failed bridge upgrade in the CLI names its status too. When the certificate check before connecting still fails, a saved certificate that has not expired is used, so `tunnel.ensure` and `connect` no longer fail on a 525. `@opentunnel/protocol` exports the shared policy as `ApiRetry`.
+
+## 0.5.0
+
+### Minor Changes
+
+- 741efd9: Routes can opt in to the PROXY protocol, so the local service sees each visitor's address. With `opentunnel route add 3000 --proxy-protocol v1|v2`, `api = { target = "127.0.0.1:4000", proxy_protocol = "v2" }` in the profile config, or `{ target, proxyProtocol: "v2" }` in the SDK, the client writes a PROXY v1 or v2 header (the visitor's address and port as the source, port 443 as the destination, and for v2 the requested hostname in a `PP2_TYPE_AUTHORITY` TLV) before each connection's data, which is still forwarded unchanged. Routes without options behave and are written exactly as before. Re-adding a route with different options updates it.
+  
+  A profile config that uses the table form for a route can't be read by older CLIs. The Rust crate's `Routes` now maps names to `Route` (which converts from a target string), and `@opentunnel/protocol` adds a `proxy-protocol` module.
+
+## 0.4.1
+
+### Patch Changes
+
+- f532395: Clients now enforce the `max_conns` they advertise on attach: a connection opened beyond it is reset with `too_many_connections` before any TLS state is allocated.
+
+## 0.4.0
+
+### Minor Changes
+
+- 3b4ccd8: Publish compiled JavaScript with type declarations instead of TypeScript sources, so the SDK runs on Node and Deno as well as Bun. The SDK now targets Effect 4.0 stable, and `effect` is a peer dependency (`^4.0.0`): apps that already use Effect share one copy with the SDK, and package managers install it automatically for everyone else.
+
+## 0.3.0
+
+## 0.2.2
+
+### Patch Changes
+
+- bbce5b7: The CLI, the SDK, the protocol package, and the Rust crates now always share one version number.
+
+## 0.2.0
+
+### Minor Changes
+
+- 1f83dab: Move to Effect `4.0.0-rc.112`. Apps on the current Effect 4 release candidates can now install the SDK without a second copy of Effect, and its source typechecks against theirs. If you use the `effect` entry points, upgrade your own Effect to the same release candidate; the promise API is unchanged.
+
+## 0.1.0
+
+### Minor Changes
+
+- 54e2493: First public release of the OpenTunnel SDK for Bun. `client.tunnel.connect({ routes })` creates the device's tunnel on first use, terminates TLS in-process, reconnects with backoff, and picks up renewed certificates. Several apps and the CLI can share one tunnel by serving different routes.
+  
+  Requires Bun 1.4.0 or later.

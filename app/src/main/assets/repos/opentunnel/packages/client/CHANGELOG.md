@@ -1,0 +1,140 @@
+# @opentunnel/client
+
+## 0.6.2
+
+### Patch Changes
+
+- d99f79d: The SDK reads the API URL from `OPENTUNNEL_API` when no `api` option is passed, like the CLI, so apps built on it can be pointed at a self-hosted server (#63).
+- @opentunnel/protocol@0.6.2
+
+## 0.6.1
+
+### Patch Changes
+
+- 54d472f: The bridge WebSocket now goes through the same HTTP proxy as the API calls (#59): `HTTPS_PROXY` for `wss://`, `HTTP_PROXY` for `ws://`, then `ALL_PROXY`, except for hosts in `NO_PROXY`. Behind an egress proxy, tunnel creation used to succeed while the bridge dialed the server directly and never attached. On Bun the SDK resolves the proxy for the bridge itself, since Bun's `WebSocket` ignores these variables; on Node and Deno the runtime applies the same settings to `fetch` and `WebSocket`. A new `proxy` option on `create` and `OpenTunnelClient.layer` sets the proxy for the API and the bridge regardless of the environment (on Node it needs the optional `undici` peer dependency). The CLI and Rust client tunnel the bridge through `http://` or `https://` proxies with `CONNECT` (basic auth from the URL), chosen by the same rules reqwest uses for the API. A SOCKS proxy stops the tunnel with an error naming it instead of being bypassed.
+- @opentunnel/protocol@0.6.1
+
+## 0.6.0
+
+### Minor Changes
+
+- 0b080e4: SDK additions for CLIs that wrap dev servers (#56): `connect({ signal })` now cancels an attach in progress (and the certificate work it started) and rejects with the signal's reason; `onRouteConflict: "fail"` makes `connect` reject with `code: "route_conflict"` instead of retrying, and a `route-conflict` event reports each conflict (see it before `connect` resolves with the new `onEvent` option); `connection.urls` maps each route to its public URL; `isValidRouteName`, `ROUTE_LABEL_PATTERN`, `ROOT_ROUTE`, and `publicUrl` are exported; `ensure({ onProgress })` reports progress, starting with the new `checking-certificate` stage. Fatal attach errors carry their code on `OpenTunnelClientError.code`. The protocol package exports `Names.LABEL_PATTERN` and `Names.publicHostname`.
+
+### Patch Changes
+
+- Updated dependencies [0b080e4]
+  - @opentunnel/protocol@0.6.0
+
+## 0.5.5
+
+### Patch Changes
+
+- @opentunnel/protocol@0.5.5
+
+## 0.5.4
+
+### Patch Changes
+
+- @opentunnel/protocol@0.5.4
+
+## 0.5.3
+
+### Patch Changes
+
+- @opentunnel/protocol@0.5.3
+
+## 0.5.2
+
+### Patch Changes
+
+- @opentunnel/protocol@0.5.2
+
+## 0.5.1
+
+### Patch Changes
+
+- 4f5a5d7: API requests survive brief outages of the hosted API, such as Cloudflare answering 525 while a server restarts. The CLI and the SDK retry network errors, 429 and 5xx (including Cloudflare's 520-527) with capped exponential backoff: reads and certificate requests on any transient failure, creating or deleting a tunnel only when the request cannot have arrived. Errors now name the HTTP status and, for Cloudflare's codes, what they mean (`Failed to read certificate: Cloudflare 525: the SSL handshake with the server failed (HTTP 525)` instead of `Failed to read certificate`), and a failed bridge upgrade in the CLI names its status too. When the certificate check before connecting still fails, a saved certificate that has not expired is used, so `tunnel.ensure` and `connect` no longer fail on a 525. `@opentunnel/protocol` exports the shared policy as `ApiRetry`.
+- Updated dependencies [4f5a5d7]
+  - @opentunnel/protocol@0.5.1
+
+## 0.5.0
+
+### Minor Changes
+
+- 741efd9: Routes can opt in to the PROXY protocol, so the local service sees each visitor's address. With `opentunnel route add 3000 --proxy-protocol v1|v2`, `api = { target = "127.0.0.1:4000", proxy_protocol = "v2" }` in the profile config, or `{ target, proxyProtocol: "v2" }` in the SDK, the client writes a PROXY v1 or v2 header (the visitor's address and port as the source, port 443 as the destination, and for v2 the requested hostname in a `PP2_TYPE_AUTHORITY` TLV) before each connection's data, which is still forwarded unchanged. Routes without options behave and are written exactly as before. Re-adding a route with different options updates it.
+  
+  A profile config that uses the table form for a route can't be read by older CLIs. The Rust crate's `Routes` now maps names to `Route` (which converts from a target string), and `@opentunnel/protocol` adds a `proxy-protocol` module.
+
+### Patch Changes
+
+- Updated dependencies [741efd9]
+  - @opentunnel/protocol@0.5.0
+
+## 0.4.1
+
+### Patch Changes
+
+- f532395: Clients now enforce the `max_conns` they advertise on attach: a connection opened beyond it is reset with `too_many_connections` before any TLS state is allocated.
+- Updated dependencies [f532395]
+  - @opentunnel/protocol@0.4.1
+
+## 0.4.0
+
+### Minor Changes
+
+- 3b4ccd8: Publish compiled JavaScript with type declarations instead of TypeScript sources, so the SDK runs on Node and Deno as well as Bun. The SDK now targets Effect 4.0 stable, and `effect` is a peer dependency (`^4.0.0`): apps that already use Effect share one copy with the SDK, and package managers install it automatically for everyone else.
+
+### Patch Changes
+
+- Updated dependencies [3b4ccd8]
+  - @opentunnel/protocol@0.4.0
+
+## 0.3.0
+
+### Patch Changes
+
+- @opentunnel/protocol@0.3.0
+
+## 0.2.2
+
+### Patch Changes
+
+- bbce5b7: The CLI, the SDK, the protocol package, and the Rust crates now always share one version number.
+- Updated dependencies [bbce5b7]
+  - @opentunnel/protocol@0.2.2
+
+## 0.2.1
+
+### Patch Changes
+
+- cdb8954: Identify the client to the server (`opentunnel/<version>` for the CLI, `opentunnel-sdk/<version>` for the SDK), including on the bridge connection.
+
+## 0.2.0
+
+### Minor Changes
+
+- 1f83dab: Move to Effect `4.0.0-rc.112`. Apps on the current Effect 4 release candidates can now install the SDK without a second copy of Effect, and its source typechecks against theirs. If you use the `effect` entry points, upgrade your own Effect to the same release candidate; the promise API is unchanged.
+
+### Patch Changes
+
+- Updated dependencies [1f83dab]
+  - @opentunnel/protocol@0.2.0
+
+## 0.1.1
+
+### Patch Changes
+
+- 5330c7e: Fix installing the SDK: 0.1.0 was published depending on `@opentunnel/protocol@0.0.0`. Certificate requests are now encoded with WebCrypto, so the SDK no longer depends on `@peculiar/x509` or `reflect-metadata`, and duplicate `@peculiar/asn1-schema` copies in your tree can no longer break tunnel creation.
+
+## 0.1.0
+
+### Minor Changes
+
+- 54e2493: First public release of the OpenTunnel SDK for Bun. `client.tunnel.connect({ routes })` creates the device's tunnel on first use, terminates TLS in-process, reconnects with backoff, and picks up renewed certificates. Several apps and the CLI can share one tunnel by serving different routes.
+  
+  Requires Bun 1.4.0 or later.
+
+### Patch Changes
+
+- Updated dependencies [54e2493]
+  - @opentunnel/protocol@0.1.0

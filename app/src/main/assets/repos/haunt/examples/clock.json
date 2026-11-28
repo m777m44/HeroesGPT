@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "id": "clock",
+  "name": "Clock fonts",
+  "grid": {
+    "columns": 271,
+    "rows": 75
+  },
+  "widgets": [
+    {
+      "id": "clock-block",
+      "widget": "../widgets/clock.lua",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "width": 32,
+        "height": 4
+      },
+      "options": {
+        "timezone": "local",
+        "font": "tiny"
+      }
+    },
+    {
+      "id": "audio-outputs",
+      "widget": "../widgets/audio-outputs.lua",
+      "rect": {
+        "x": 0,
+        "y": 19,
+        "width": 32,
+        "height": 3
+      },
+      "options": {}
+    },
+    {
+      "id": "calendar",
+      "widget": "../widgets/calendar.lua",
+      "rect": {
+        "x": 0,
+        "y": 5,
+        "width": 32,
+        "height": 13
+      },
+      "options": {}
+    },
+    {
+      "id": "system-monitor",
+      "widget": "../widgets/system-monitor.lua",
+      "rect": {
+        "x": 0,
+        "y": 22,
+        "width": 32,
+        "height": 11
+      },
+      "options": {}
+    }
+  ]
+}

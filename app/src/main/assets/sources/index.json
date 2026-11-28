@@ -99,6 +99,11 @@
    "file": "20_overchat_bot.py",
    "title": "OverChat — البوت الضخم المتكامل",
    "size": 96327
+  },
+  {
+   "file": "21_ai_giga_deepai_bot.py",
+   "title": "بوت تليجرام — GigaChat + DeepAI (متعدد الأنماط)",
+   "size": 47079
   }
  ]
 }

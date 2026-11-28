@@ -1,7 +1,7 @@
 {
-  "versionCode": 22,
-  "versionName": "7.0",
+  "versionCode": 23,
+  "versionName": "7.1",
   "apk": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT.apk",
-  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v7.0.apk",
-  "notes": "v7.0 — OpenCode Zen رسميًا داخل التطبيق: مزوّدان مجانيان (Nemotron 3.5 Super بسياق مليون + Big Pickle للتفكير العميق) من بوابة opencode.ai/zen/v1 — المفتاح المجاني من opencode.ai/auth بلا بطاقة. تم أيضًا دمج مكتبة lingling كاملة (78 مشروعًا / 22,905 ملفًا من المعرفة) في مكتبة المستودعات. ملاحظة صريحة: أداة lingling تعتمد على تدوير عناوين IP (Tor/IPv6) لتجاوز حدود OpenCode اليومية — هذا أسلوب إساءة استخدام للخدمة ولا يعمل على أندرويد (أداة ويندوز فقط)، لذلك لم يُبنَ؛ البديل المشروع الذي دمجناه هو الطبقة المجانية الرسمية لـ Zen تدخل فريق تدوير المزوّدين مع بقية المصادر المجانية."
+  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v7.1.apk",
+  "notes": "v7.1 — الدمج الضخم الثاني: مستودع OpenCode الرسمي كاملًا (المحرك + الحزمة الأساسية + واجهات TUI/App/GUI) + OpenCode للأندرويد + 24 مشروعًا مرافقًا من حساب anomalyco (وكلاء، تحكم بالطرفية، benchmark، إضافات) — المكتبة الآن 102 مشروعًا / 33,955 ملفًا / ~263MB معرفة مفتوحة داخل التطبيق. كما أُدمج بوت GigaChat + DeepAI المرفوع (الملف 21) في مصادر التطبيق مع فحص أمان كامل. ملاحظة صريحة: الملف التنفيذي opencode-linux-arm64-musl.tar.gz هو ثنائي لنظام لينكس لا يعمل على أندرويد ولا يُدمج في APK، ومستودعات الحساب غير المرتبطة بـ OpenCode (rune, hex, nightmail, sst, strobe, browse وغيرها) لم تُدمج نصيًا كاملة لأن مجموع نصوص الحساب (~420MB) كان سيدفع APK فوق حد GitHub الصارم 100MB للملف الواحد (حد GitHub 100MB للملف الواحد) — الأولوية لمنظومة OpenCode كاملة كما طلبت."
 }

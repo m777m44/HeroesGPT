@@ -1,0 +1,21 @@
+{
+  "name": "@radiant/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@planetscale/database": "1.20.1",
+    "@radiant/database": "workspace:*",
+    "drizzle-orm": "1.0.0-beta.18-7eb39f0",
+    "effect": "4.1.2",
+    "jose": "6.2.10",
+    "ulid": "3.0.1"
+  }
+}

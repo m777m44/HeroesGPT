@@ -1,0 +1,113 @@
+# The hosted service on Fly.io: machines in iad, ord, sjc, gru, lhr, fra, cdg, jnb, sin, nrt and syd, all storing
+# everything in one PlanetScale MySQL database (the DATABASE_URL secret; AWS us-east-1, next to iad). Visitors and
+# bridges reach the nearest machine; the machines find each other as opentunnel.internal (FLY_APP_NAME, set by Fly)
+# and keep a mesh of links over the private network, through which they know where every bridge is and forward a
+# visitor whose bridge is elsewhere (docs/server.md, "Multiple regions"). Both services are raw TCP (no Fly TLS or HTTP handlers),
+# so tenant TLS passes through to the tunnel clients untouched. Raw TCP on 443 needs a dedicated IPv4:
+# `fly ips allocate-v4`. Secrets: `fly secrets set` (docs/server.md).
+
+app = "opentunnel"
+primary_region = "iad"
+kill_signal = "SIGTERM"
+# The server keeps serving for SHUTDOWN_DRAIN_MS (10 s) after the signal, then gives requests up to 10 s to finish.
+kill_timeout = "30s"
+
+# Blue-green: a new machine starts next to each old one, and only once all are healthy does Fly cordon the old ones
+# (the proxy stops sending them new connections), wait 10 s, and stop them. Their bridges then get `drain` and close
+# 1012 and reconnect to the new machines. A rolling deploy stopped machines the proxy was still routing to, which
+# Cloudflare reported as thousands of 525s per deploy.
+[deploy]
+  strategy = "bluegreen"
+
+# A machine that cannot reach the database for STARTUP_DB_TIMEOUT_MS (2 minutes) at startup exits with status 1,
+# and Fly restarts it; a clean exit after SIGTERM (status 0) is not restarted. See docs/server.md, "Storage".
+[[restart]]
+  policy = "on-failure"
+  retries = 10
+
+[env]
+  OPENTUNNEL_DOMAIN = "opentunnel.xyz"
+  # Fly's proxy_proto handler below prepends a PROXY v2 header with the visitor's address.
+  PROXY_PROTOCOL = "true"
+  RUST_LOG = "info"
+  # opentunnel.xyz is on the Public Suffix List, so no public CA issues for it: the apex stays proxied by
+  # Cloudflare, which reaches this server with a Cloudflare Origin CA certificate.
+  TLS_CERT_FILE = "/etc/opentunnel/origin-cert.pem"
+  TLS_KEY_FILE = "/etc/opentunnel/origin-key.pem"
+  # Mesh links, forwarded visitors and route checks between machines, on the private network only: the server
+  # binds it to FLY_PRIVATE_IP (6PN), and no [[services]] entry exposes it. Requires the INTERNAL_TOKEN secret.
+  INTERNAL_LISTEN = "[::]:9000"
+  # Prometheus metrics for Fly's scraper ([metrics] below), on every interface (the scraper does not reach the 6PN
+  # address); no [[services]] entry exposes the port, and nothing in it is secret or per tenant.
+  METRICS_LISTEN = "[::]:9091"
+  LOG_FORMAT = "json"
+
+# Scraped every 15 s into Fly's managed Prometheus (fly-metrics.net); see docs/server.md, "Observability".
+[metrics]
+  port = 9091
+  path = "/metrics"
+
+[[files]]
+  guest_path = "/etc/opentunnel/origin-cert.pem"
+  secret_name = "ORIGIN_CERT_PEM"
+
+[[files]]
+  guest_path = "/etc/opentunnel/origin-key.pem"
+  secret_name = "ORIGIN_KEY_PEM"
+
+# Public TLS: tunnel hostnames by SNI (passthrough), and the API and website for opentunnel.xyz.
+[[services]]
+  internal_port = 8443
+  protocol = "tcp"
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 443
+    handlers = ["proxy_proto"]
+    proxy_proto_options = { version = "v2" }
+
+  # Bridges plus visitors and API calls: a bridge costs ~50 KB in production. Past soft_limit the proxy prefers
+  # the region's other machine (soft limits never leave the region; only when every machine there is at
+  # hard_limit do new connections go to another region). A shared-cpu-Nx reaches its CPU baseline (N/16 of a
+  # core) at roughly N x 700-1000 bridges; each region's two machines are sized to stay well under that, so the
+  # soft limit only evens out the two and the hard limit stays high so nothing is refused.
+  # See docs/server.md, "Capacity".
+  [services.concurrency]
+    type = "connections"
+    soft_limit = 3000
+    hard_limit = 10000
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+
+# Plain HTTP: redirects to HTTPS, and /health.
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 80
+
+  [services.concurrency]
+    type = "connections"
+    soft_limit = 1000
+    hard_limit = 2000
+
+  [[services.http_checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+    method = "get"
+    path = "/health"
+    protocol = "http"
+
+# No [[vm]] section: machine sizes are set per region (two machines in each, sized to the region's load:
+# `fly machine update <id> --vm-size shared-cpu-Nx`), and a deploy keeps every machine's size. See docs/server.md,
+# "Capacity".
