@@ -16,12 +16,17 @@ public class Api {
         void onPartial(String header, String partial);
     }
 
+    /** علم إلغاء عام — يضبطه زر الإيقاف لقطع البث الجاري بأمان. */
+    public static final java.util.concurrent.atomic.AtomicBoolean CANCEL =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
     public static String chat(Provider p, String system, String userContent) throws Exception {
         Exception last = null;
         for (int attempt = 0; attempt < 3; attempt++) {
             try {
                 return chatOnce(p, system, userContent, false, null);
             } catch (Exception e) {
+                if (String.valueOf(e.getMessage()).contains("GENERATION_STOPPED")) throw e;
                 String m = String.valueOf(e.getMessage() == null ? "" : e.getMessage());
                 boolean httpNoRetry = m.startsWith("HTTP 401") || m.startsWith("HTTP 403")
                         || m.startsWith("HTTP 404") || m.startsWith("HTTP 400");
@@ -43,6 +48,7 @@ public class Api {
             try {
                 return chatOnce(p, system, userContent, true, live);
             } catch (Exception e) {
+                if (String.valueOf(e.getMessage()).contains("GENERATION_STOPPED")) throw e;
                 String m = String.valueOf(e.getMessage() == null ? "" : e.getMessage());
                 boolean httpNoRetry = m.startsWith("HTTP 401") || m.startsWith("HTTP 403")
                         || m.startsWith("HTTP 404") || m.startsWith("HTTP 400");
@@ -228,6 +234,10 @@ public class Api {
         long lastEmit = 0;
         int n;
         while ((n = is.read(buf)) > 0) {
+            if (CANCEL.get()) {
+                is.close();
+                throw new java.io.IOException("GENERATION_STOPPED");
+            }
             raw.append(new String(buf, 0, n, StandardCharsets.UTF_8));
             int sep;
             while ((sep = raw.indexOf("\n")) >= 0) {

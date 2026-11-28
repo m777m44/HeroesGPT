@@ -10,7 +10,7 @@
         android:layout_height="wrap_content"
         android:background="@drawable/bg_devil_aura"
         android:orientation="vertical"
-        android:paddingTop="16dp"
+        android:paddingTop="14dp"
         android:paddingBottom="10dp">
 
         <TextView
@@ -18,7 +18,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center"
-            android:shadowColor="#99E6284C"
+            android:shadowColor="#99D77757"
             android:shadowDx="0"
             android:shadowDy="0"
             android:shadowRadius="22"
@@ -51,9 +51,12 @@
                 android:paddingEnd="10dp">
 
                 <TextView
-                    android:id="@+id/con_team"
+                    android:id="@+id/con_heroes"
                     style="@style/ChipStyle"
-                    android:text="@string/tool_team" />
+                    android:background="@drawable/bg_pill_on"
+                    android:text="@string/heroes_all"
+                    android:textColor="@color/accent"
+                    android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/con_keys"
@@ -66,49 +69,19 @@
                     android:text="@string/tool_github" />
 
                 <TextView
-                    android:id="@+id/con_library"
+                    android:id="@+id/con_search"
                     style="@style/ChipStyle"
-                    android:text="@string/tool_library" />
+                    android:text="@string/tool_search" />
+
+                <TextView
+                    android:id="@+id/con_settings"
+                    style="@style/ChipStyle"
+                    android:text="@string/tool_settings" />
 
                 <TextView
                     android:id="@+id/con_update"
                     style="@style/ChipStyle"
                     android:text="@string/tool_update" />
-            </LinearLayout>
-        </HorizontalScrollView>
-
-        <HorizontalScrollView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:scrollbars="none">
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp">
-
-                <TextView
-                    android:id="@+id/con_mode_chat"
-                    style="@style/ChipStyle"
-                    android:text="@string/console_mode_chat" />
-
-                <TextView
-                    android:id="@+id/con_mode_code"
-                    style="@style/ChipStyle"
-                    android:text="@string/console_mode_code" />
-
-                <TextView
-                    android:id="@+id/con_mode_apps"
-                    style="@style/ChipStyle"
-                    android:text="@string/console_mode_apps" />
-
-                <TextView
-                    android:id="@+id/con_mode_team"
-                    style="@style/ChipStyle"
-                    android:text="@string/console_mode_team" />
             </LinearLayout>
         </HorizontalScrollView>
     </LinearLayout>
@@ -125,6 +98,13 @@
         android:scrollbars="none"
         android:stackFromBottom="true"
         android:transcriptMode="alwaysScroll" />
+
+    <com.heroes.gpt.ThinkingView
+        android:id="@+id/con_thinking"
+        android:layout_width="wrap_content"
+        android:layout_height="72dp"
+        android:layout_gravity="center_horizontal"
+        android:visibility="gone" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -151,10 +131,22 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:background="@drawable/bg_glow_button"
-            android:paddingStart="20dp"
-            android:paddingEnd="20dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
             android:text="@string/console_send"
             android:textColor="#FFFFFF"
             android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/con_stop"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_card"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:text="@string/con_stop"
+            android:textColor="@color/danger"
+            android:visibility="gone" />
     </LinearLayout>
 </LinearLayout>

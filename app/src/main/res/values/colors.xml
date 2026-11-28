@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Shadow Devil palette v6.5 -->
+    <!-- Claude Code-inspired palette v8.0 (on Shadow Devil dark base) -->
     <color name="bg">#07070B</color>
-    <color name="surface">#12121C</color>
-    <color name="surface2">#1B1B28</color>
-    <color name="text">#EDEBF4</color>
-    <color name="text_dim">#8E8BA3</color>
-    <color name="gold">#FF2E4C</color>
-    <color name="accent">#E6284C</color>
-    <color name="accent2">#FF7A8C</color>
+    <color name="surface">#121218</color>
+    <color name="surface2">#1B1B22</color>
+    <color name="text">#EDEBE6</color>
+    <color name="text_dim">#999999</color>
+    <color name="gold">#D77757</color>
+    <color name="accent">#D77757</color>
+    <color name="accent2">#E8A88C</color>
     <color name="devil_purple">#9D4EDD</color>
     <color name="ember">#FF6B35</color>
     <color name="ok">#3DDC84</color>
     <color name="danger">#FF5252</color>
-    <color name="border">#2A2233</color>
-    <color name="live_glow">#33E6284C</color>
+    <color name="border">#44888888</color>
+    <color name="live_glow">#33D77757</color>
 </resources>
