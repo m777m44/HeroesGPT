@@ -2,11 +2,15 @@ name: APK Build
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "app/**"
       - "build.gradle"
       - "settings.gradle"
       - "gradle.properties"
+    tags:
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -38,3 +42,23 @@ jobs:
         with:
           name: HeroesGPT-APK
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Build signed release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          chmod +x gradlew || true
+          if [ -f gradlew ]; then
+            ./gradlew clean assembleRelease --no-daemon
+          else
+            gradle clean assembleRelease --no-daemon || (sudo apt-get update -y && sudo apt-get install -y gradle && gradle clean assembleRelease --no-daemon)
+          fi
+          ls -la app/build/outputs/apk/release/
+
+      - name: Publish release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/release/app-release.apk
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

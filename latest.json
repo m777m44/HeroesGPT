@@ -1,7 +1,7 @@
 {
-  "versionCode": 24,
-  "versionName": "7.2",
+  "versionCode": 25,
+  "versionName": "8.0",
   "apk": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT.apk",
-  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v7.2.apk",
-  "notes": "v7.2 — واجهة HEROESGPT الموحدة بأسلوب Claude Code: شاشة واحدة للدردشة والتواصل والبرمجة وبناء التطبيقات — الوكيل الذكي HEROESGPT يرد مباشرة ببث حي، مع 4 أوضاع (دردشة، برمجة، تطبيقات، فريق الأبطال كامل داخل المحادثة)، وشريط أدوات موحد (الفريق، المفاتيح، GitHub، المكتبة، التحديث) — زر السورسات أُزيل. كما دُمجت منظمة OpenMinis كاملة (8 مستودعات: تطبيق OpenMinis للوكلاء بنسختيه Android وiOS + MinisSkills + AwesomeMinis + iCTRL وغيرها) — المكتبة الآن 107 مشاريع / 29,329 ملفًا / ~290MB. لاحظ: استُبدلت 3 مستودعات ضخمة منخفضة القيمة (lm_eval_harness، huskyholdem_bench، openshell) بأصول OpenMinis للحفاظ على APK تحت حد GitHub 100MB."
+  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v8.0.apk",
+  "notes": "v8.0 — هيروس الكل: زر واحد موحّد للدردشة والبرمجة وبناء التطبيقات، وأزرار الفريق والمكتبة أُزيلت من الواجهة (الفريق يعمل داخليًا وخفيةً: مخطط ← باني ← مراجع). 🤔 مؤشر تفكير احترافي بدوران 360° وطَفو جيبي بنعومة 60fps يظهر في كل عمليات التوليد والبحث. 🎨 تصميم Claude Code (خلفية #07070B، لهجة #D77757). 🔍 بحث موحد عبر 9 محركات (Brave، Serper، Tavily، Google CSE، Bing، DuckDuckGo، SearXNG، Exa، Perplexity) مع محرك \"الكل\" ونسخ وفتح خارجي. 🔑 إدارة مفاتيح مركزية عبر keys.json مع تحديث تلقائي من GitHub وعرض حالة كل مفتاح مموّهًا. 📎 رفع ملفات ومجلدات كاملة إلى GitHub عبر SAF (كل الأنواع، بما فيها Drive/OneDrive) مع حفظ الصلاحية. ⏹ زر إيقاف فوري للتوليد + إعادة التوليد + نسخ أي رسالة + حفظ الجلسات. 🚀 سير عمل GitHub Actions يبني APK موقّع وينشره في Releases عند كل tag (v*)."
 }

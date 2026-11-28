@@ -1,3 +1,44 @@
+## v8.0 — هيروس الكل (Claude Code Edition) 🚀
+
+**زر واحد لكل شيء** — الدردشة والبرمجة وبناء التطبيقات وفريق الأبطال في واجهة موحدة.
+
+### الجديد
+- 🔥 **هيروس الكل**: أُزيلت أزرار الفريق والمكتبة ودردشة/برمجة/تطبيقات المنفصلة. كل شيء في واجهة واحدة (ConsoleActivity): اكتب رسالة عادية = رد مباشر ببث حي؛ اكتب طلب بناء/برمجة (ابنِ، أنشئ، صمّم، برمج…) = يعمل **الفريق الداخلي** (مخطط ← باني ← مراجع) خلف الكواليس مع مؤشر التفكير فقط.
+- 🤔 **مؤشر التفكير الاحترافي** (`ThinkingView`): دوران 360° هادئ + طَفو جيبي لأعلى/أسفل، 60fps، ظهور واختفاء متدرجان — يظهر في الدردشة والبحث وكل التوليد.
+- 🎨 **تصميم Claude Code**: خلفية `#07070B`، سطح `#121218`، لهجة `#D77757`، نص ثانوي `#999999`.
+- 🔍 **بحث موحد بـ 9 محركات**: Brave، Serper، Tavily، Google CSE، Bing، DuckDuckGo (يعمل فورًا بلا مفتاح)، SearXNG (يعمل بمثيل عام)، Exa، Perplexity — مع محرك "الكل" الذي يدمج نتائج كل المحركات المتصلة، ونسخ وفتح خارجي لكل نتيجة.
+- 🔑 **إدارة مفاتيح مركزية**: `keys.json` في المستودع + `assets/keys.json` داخل التطبيق. عند بدء التشغيل يُجلب `raw.githubusercontent.com/m777m44/HeroesGPT/main/keys.json` ويُدمج محليًا (المحلي أساس). شاشة الحالة تعرض كل مفتاح مموّهًا (أول 5 + آخر 4).
+- 📎 **رفع عبر SAF**: زرا "رفع ملفات" و"رفع مجلد كامل" في شاشة GitHub — `ACTION_OPEN_DOCUMENT` بأنواع كلها (`*/*`) وتحديد متعدد + `ACTION_OPEN_DOCUMENT_TREE` للمجلدات، مع `takePersistableUriPermission` لحفظ الصلاحية، ودعم Drive/OneDrive.
+- ⏹ **إيقاف فوري** للتوليد (`Api.CANCEL`) + 🔄 إعادة توليد + 📋 نسخ أي رسالة (ضغطة مطولة) + 💾 حفظ الجلسة + 🗑 مسح المحادثة + ⚙️ وضع التفكير (سريع/متوازن/عميق) من الإعدادات.
+- 🚀 **نشر تلقائي**: سير عمل `apk-build.yml` يبني APK موقّعًا (heroes.jks) وينشره في Releases عند دفع أي tag يبدأ بـ `v` (مثل `v8.0.0`).
+
+### المفاتيح (keys.json)
+```json
+{
+  "brave": "",            // brave.com/search/api
+  "serper": "",           // serper.dev
+  "tavily": "",           // tavily.com
+  "google_cse_key": "",   // console.cloud.google.com
+  "google_cse_cx": "",    // programmablesearchengine.google.com
+  "bing": "",             // azure.microsoft.com (Bing Search v7)
+  "searxng_url": "https://searx.be",
+  "exa": "",              // exa.ai
+  "perplexity": "",       // perplexity.ai
+  "gh_token": ""          // github.com/settings/tokens
+}
+```
+> ⚠️ لا تضع مفاتيح حقيقية في المستودع العام بدون تشفير (استخدم الخزنة المشفرة داخل التطبيق). DuckDuckGo وSearXNG يعملان فورًا بلا مفاتيح.
+
+### البناء
+```bash
+./gradlew clean assembleDebug          # أو assembleRelease (موقّع تلقائيًا بـ keystore/heroes.jks)
+```
+
+### النشر
+```bash
+git tag v8.0.0 && git push origin v8.0.0   # يبني وينشر app-release.apk في Releases تلقائيًا
+```
+
 ## v7.2 — واجهة HEROESGPT الموحدة ⚡ + دمج منظمة OpenMinis
 
 - **واجهة جديدة كاملة بأسلوب Claude Code**: شاشة واحدة للتواصل والدردشة والبرمجة وبناء التطبيقات — بطلها **HEROESGPT**:
