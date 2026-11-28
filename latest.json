@@ -1,7 +1,7 @@
 {
-  "versionCode": 23,
-  "versionName": "7.1",
+  "versionCode": 24,
+  "versionName": "7.2",
   "apk": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT.apk",
-  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v7.1.apk",
-  "notes": "v7.1 — الدمج الضخم الثاني: مستودع OpenCode الرسمي كاملًا (المحرك + الحزمة الأساسية + واجهات TUI/App/GUI) + OpenCode للأندرويد + 24 مشروعًا مرافقًا من حساب anomalyco (وكلاء، تحكم بالطرفية، benchmark، إضافات) — المكتبة الآن 102 مشروعًا / 33,955 ملفًا / ~263MB معرفة مفتوحة داخل التطبيق. كما أُدمج بوت GigaChat + DeepAI المرفوع (الملف 21) في مصادر التطبيق مع فحص أمان كامل. ملاحظة صريحة: الملف التنفيذي opencode-linux-arm64-musl.tar.gz هو ثنائي لنظام لينكس لا يعمل على أندرويد ولا يُدمج في APK، ومستودعات الحساب غير المرتبطة بـ OpenCode (rune, hex, nightmail, sst, strobe, browse وغيرها) لم تُدمج نصيًا كاملة لأن مجموع نصوص الحساب (~420MB) كان سيدفع APK فوق حد GitHub الصارم 100MB للملف الواحد (حد GitHub 100MB للملف الواحد) — الأولوية لمنظومة OpenCode كاملة كما طلبت."
+  "url": "https://github.com/m777m44/HeroesGPT/raw/main/apk/HeroesGPT-v7.2.apk",
+  "notes": "v7.2 — واجهة HEROESGPT الموحدة بأسلوب Claude Code: شاشة واحدة للدردشة والتواصل والبرمجة وبناء التطبيقات — الوكيل الذكي HEROESGPT يرد مباشرة ببث حي، مع 4 أوضاع (دردشة، برمجة، تطبيقات، فريق الأبطال كامل داخل المحادثة)، وشريط أدوات موحد (الفريق، المفاتيح، GitHub، المكتبة، التحديث) — زر السورسات أُزيل. كما دُمجت منظمة OpenMinis كاملة (8 مستودعات: تطبيق OpenMinis للوكلاء بنسختيه Android وiOS + MinisSkills + AwesomeMinis + iCTRL وغيرها) — المكتبة الآن 107 مشاريع / 29,329 ملفًا / ~290MB. لاحظ: استُبدلت 3 مستودعات ضخمة منخفضة القيمة (lm_eval_harness، huskyholdem_bench، openshell) بأصول OpenMinis للحفاظ على APK تحت حد GitHub 100MB."
 }

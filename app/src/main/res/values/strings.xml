@@ -258,4 +258,18 @@
     <string name="vault_restoring">جارٍ فك التشفير والاستعادة…</string>
     <string name="run_script_btn">▶ تشغيل</string>
     <string name="run_script_hint">تشغيل السكربت بعد اكتمال برمجته</string>
+    <string name="console_subtitle">وكيلك الذكي — دردشة • برمجة • بناء تطبيقات • فريق الأبطال</string>
+    <string name="console_welcome">⚡ أهلاً بك! أنا HEROESGPT — وكيلك الذكي الموحد.\n\nاختر وضعًا من الأعلى:\n💬 دردشة — تحدث معي في أي شيء\n💻 برمجة — أكتب لك كودًا كاملًا\n📱 تطبيقات — أبني تطبيقات من فكرتك\n⚔️ فريق الأبطال — الفريق كامل يعمل على مهمتك داخل هذه المحادثة\n\nوشريط الأدوات أعلى الشاشة: الفريق، المفاتيح، GitHub، المكتبة، التحديث.\n\nاكتب رسالتك وسأبدأ فورًا 🚀</string>
+    <string name="console_hint">اكتب رسالتك لـ HEROESGPT…</string>
+    <string name="console_send">إرسال</string>
+    <string name="console_busy">⏳ انتظر انتهاء الطلب الحالي…</string>
+    <string name="console_mode_chat">💬 دردشة</string>
+    <string name="console_mode_code">💻 برمجة</string>
+    <string name="console_mode_apps">📱 تطبيقات</string>
+    <string name="console_mode_team">⚔️ فريق الأبطال</string>
+    <string name="tool_team">⚔️ الفريق</string>
+    <string name="tool_keys">🔑 المفاتيح</string>
+    <string name="tool_github">🐙 GitHub</string>
+    <string name="tool_library">📚 المكتبة</string>
+    <string name="tool_update">🔄 التحديث</string>
 </resources>

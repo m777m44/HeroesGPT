@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Minis 보조 화면</string>
+    <string name="notif_title">Minis 보조 화면 실행 중</string>
+    <string name="state_idle">AI 대기 중</string>
+    <string name="state_working">AI 작업 중</string>
+    <string name="state_human">직접 조작 중</string>
+    <string name="state_taken">제어권을 가져왔습니다</string>
+    <string name="state_stopped">AI 중지됨</string>
+    <string name="hold_to_take_over">길게 눌러 제어하기</string>
+    <string name="give_back">AI에게 돌려주기</string>
+    <string name="confirm_close">한 번 더 탭하면 닫힙니다</string>
+    <string name="idle_closing">사용이 없어 %1$d초 후 닫힙니다</string>
+    <string name="cd_stop">AI 중지</string>
+    <string name="cd_close">보조 화면 닫기</string>
+    <string name="cd_expand">펼치기</string>
+    <string name="a11y_label">Minis 보조 화면 UI 리더</string>
+    <string name="a11y_desc">Minis 에이전트가 보조 화면의 위젯 트리를 읽어 좌표를 추측하지 않고 조작할 수 있게 합니다. 읽기 전용이며 데이터는 이 기기 내 요청에만 응답하고 저장하거나 전송하지 않습니다.</string>
+</resources>

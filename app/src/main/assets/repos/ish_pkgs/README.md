@@ -1,0 +1,134 @@
+# ish-pkgs
+
+Prebuilt binaries for **iSH** (the ARM64 guest in [Minis](https://github.com/OpenMinis/ish-arm64)),
+published as a signed **apk repository**. Plain `apk` is the only client you need.
+
+> This is a collection of **third-party software rebuilt for iSH**, not original work.
+> Each package says exactly which upstream tag it was built from and whether anything was changed.
+
+## Install
+
+Architecture: **aarch64 only** (the ARM64 iSH guest). The original x86 iSH guest is not supported.
+
+```sh
+# 1) trust the repository key (once)
+wget -O /etc/apk/keys/ish-pkgs.rsa.pub \
+  https://raw.githubusercontent.com/OpenMinis/ish-pkgs/main/ish-pkgs.rsa.pub
+
+# 2) add the repository (once)
+echo "https://raw.githubusercontent.com/OpenMinis/ish-pkgs/main" >> /etc/apk/repositories
+
+# 3) install
+apk update
+apk add pair-host            # just pair_host (~0.85 MB)
+apk add idevice-tools        # the rest of idevice-tools; pulls in pair-host
+apk add ipatool              # search, purchase and download App Store IPAs (~10.9 MB)
+apk add swift                # Swift 6.4.2 compiler + SwiftPM (launcher; fetches the toolchain on first run)
+```
+
+Verify the key you downloaded before trusting it:
+
+```
+sha256(ish-pkgs.rsa.pub) = 2db5bb598e9b98596be896a43117d4614e8c07f243ba476eeee9d89679022fdd
+```
+
+Updating is the normal apk flow: `apk update && apk upgrade`.
+
+## Status
+
+`aarch64/` holds the signed index and the packages built from upstream **v0.1.68** (unmodified source, see
+the `PROVENANCE.txt` shipped inside each package). The apk flow below has been exercised end to end against a
+local HTTP copy of this repository: untrusted-signature rejection, public-key trust, search, install, running
+the binary, dependency pull-in, and clean removal.
+
+Not yet verified: fetching from the public GitHub address (this repository may be private while you read this,
+in which case `raw.githubusercontent.com` returns 404).
+
+## Packages
+
+| package | contents | upstream |
+|---|---|---|
+| `pair-host` | `pair_host`: advertise as an iOS 27 pairable host and write a pairing file | [jkcoxson/idevice](https://github.com/jkcoxson/idevice) (MIT) |
+| `idevice-tools` | `idevice-tools`, `idevice_id`, `iproxy`, `pair_apple_tv` (depends on `pair-host`) | same |
+| `ipatool` | `ipatool`: search, purchase and download App Store IPAs | [majd/ipatool](https://github.com/majd/ipatool) (MIT) |
+| `swift` | `swift`, `swiftc`, `swift-build/-package/-run/-test`: Swift 6.4.2 toolchain (static musl), see [pkgs/swift](pkgs/swift/README.md) | [swiftlang/swift](https://github.com/swiftlang/swift) (Apache-2.0 WITH LLVM-exception) |
+
+`apk del idevice-tools` also removes `pair-host` unless you installed it explicitly (`apk add pair-host`).
+
+### Notes that matter in iSH
+
+- `idevice_id` and `iproxy` expect a running **usbmuxd**. iSH has none, so `idevice_id` aborts at start
+  (`unwrap()` on a missing socket; upstream builds with `panic = "abort"`). This is upstream behaviour.
+- `pair_host` advertises over mDNS with raw multicast. On iOS that needs the
+  `com.apple.developer.networking.multicast` entitlement, so **from inside the iOS app the advertisement
+  does not leave the phone**. Use it on a Mac/Linux host, or have the app publish the service
+  (see `minis-bonjour`) and run `pair_host` for the protocol part.
+- `ipatool` on iOS/iSH:
+  - iOS privacy masks all network interface MAC addresses to `02:00:00:00:00:00`. Our build includes a fallback and supports `IPATOOL_MAC_ADDRESS` environment variable override.
+  - Non-interactive mode uses a local FileBackend keyring. Supports `IPATOOL_KEYCHAIN_PASSPHRASE` environment variable (defaults to `minis` if unset).
+  - Dynamically linked against musl libc so Unicorn's JIT engine can be loaded via `dlopen`. Requires Minis build with 64-bit ADRP fix in Asbestos for SAP handshake to succeed.
+- `swift`:
+  - The apk is a ~150 KB launcher. The toolchain (~173 MB, 708 MB unpacked) is too big for a file in this git
+    repository, so it lives in the GitHub Release `v6.4.2`. The first `swift`/`swiftc` run downloads it, checks the
+    SHA-256 pinned in the launcher and unpacks it into `/usr/local/swift`; afterwards the launcher just `exec`s.
+  - Programs are built as static executables. Patches make the runtime tolerate iSH's flaky `/proc/self/exe`,
+    missing PI futexes and unreadable `/proc/<tid>/stat`; see `pkgs/swift/ISH-NOTES.md`.
+
+## How binaries are built
+
+Everything is reproducible from this repo:
+
+```sh
+pkgs/idevice-tools/update.sh                      # is there a newer upstream tag? (read-only)
+pkgs/idevice-tools/build.sh v0.1.68 dist          # cross-compile on macOS/Linux (needs rustup + zig)
+tools/publish.sh dist/idevice-tools-ish-arm64-v0.1.68.zip v0.1.68    # apk packages + signed index
+```
+
+- `build.sh` fetches the **upstream tag**, applies `pkgs/<name>/patches/*.patch` (if any), cross-compiles
+  for `aarch64-unknown-linux-musl` with `zig cc`, and keeps the same executables the upstream CI ships.
+- The zip layout mirrors upstream: `idevice-tools-ish-arm64-<tag>.zip` next to upstream's
+  `idevice-tools-linux-<tag>.zip`, flat, same file names.
+- Every package carries `/usr/share/doc/<pkg>/PROVENANCE.txt`: upstream URL, tag, commit, toolchain,
+  sha256 of each file, and either `modifications: NONE` or the list of patches applied.
+- The build is **reproducible**: the `pair_host` built from tag `v0.1.68` is byte-identical to the one
+  built earlier from a later main commit that did not touch it.
+
+### Current builds
+
+| package | version | upstream | commit | modifications |
+|---|---|---|---|---|
+| `pair-host`, `idevice-tools` | `0.1.68-r0` | `v0.1.68` | `d32c8189` | none |
+| `ipatool` | `2.7.0-r1` | `v2.7.0` | `4484b55d` | 3 patches (MAC fallback, keychain passphrase env, auth info storefront) |
+| `swift` | `6.4.2-r1` | `swift-6.4.2-RELEASE` | `83eb1244` | 12 patches in 7 repositories (static musl host, iSH runtime fallbacks, macros plugin, swift-testing, SwiftPM) |
+
+Version scheme: `<upstream version>-r<N>`. `N` increases when we rebuild or patch without an upstream change.
+
+## Trust model
+
+- The **index** is signed with an RSA-4096 key (same scheme as Alpine's own repositories: RSA over the
+  SHA-1 of the compressed index). Individual `.apk` files are not signed; they are bound to the signed index
+  by the checksum stored in it.
+- apk refuses the repository until you install the public key, so a tampered index is rejected.
+- A signature here only means "published by OpenMinis". It does **not** mean "published by upstream".
+- The private key lives only on the maintainer's device and is never committed (`.gitignore` blocks it).
+  If it ever changes, this README and the fingerprint above change with it.
+
+## Layout
+
+```
+ish-pkgs.rsa.pub                  public key (private key is never in git)
+aarch64/APKINDEX.tar.gz           signed index
+aarch64/*.apk                     packages
+pkgs/<name>/UPSTREAM              upstream URL + the tag currently built
+pkgs/<name>/build.sh update.sh    build and update scripts
+pkgs/<name>/patches/              our patches, if any (none yet)
+pkgs/<name>/LICENSE.upstream      upstream license, kept as required
+tools/mkapk.py mkrepo.py          pure-Python apk packer and index signer (no abuild needed)
+tools/publish.sh                  build zip -> .apk -> signed index
+GitHub Releases                   large payloads that do not fit in git (e.g. the Swift toolchain archive)
+```
+
+## License
+
+Scripts and docs: MIT (see `LICENSE`). Binaries: each upstream's own license; for `idevice-tools` that is MIT,
+copyright Jackson Coxson (`pkgs/idevice-tools/LICENSE.upstream`).
