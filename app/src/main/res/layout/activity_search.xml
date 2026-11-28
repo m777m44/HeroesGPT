@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_devil_aura"
+        android:orientation="vertical"
+        android:paddingTop="14dp"
+        android:paddingBottom="10dp">
+
+        <TextView
+            android:id="@+id/search_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/search_title"
+            android:textColor="@color/accent"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="8dp">
+
+            <EditText
+                android:id="@+id/search_input"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@drawable/bg_card"
+                android:hint="@string/web_search_hint"
+                android:imeOptions="actionSearch"
+                android:inputType="text"
+                android:maxLines="1"
+                android:padding="12dp"
+                android:textColor="@color/text"
+                android:textColorHint="@color/text_dim" />
+
+            <Button
+                android:id="@+id/search_go"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_glow_button"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
+                android:text="@string/search_go"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/search_engine_chips"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp" />
+        </HorizontalScrollView>
+
+        <TextView
+            android:id="@+id/search_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:textColor="@color/text_dim"
+            android:textSize="11sp"
+            android:singleLine="true"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <com.heroes.gpt.ThinkingView
+        android:id="@+id/search_thinking"
+        android:layout_width="wrap_content"
+        android:layout_height="72dp"
+        android:layout_gravity="center_horizontal"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/search_running"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="@string/search_running"
+        android:textColor="@color/text_dim"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <ListView
+        android:id="@+id/search_results"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:divider="@android:color/transparent"
+        android:dividerHeight="6dp"
+        android:padding="10dp"
+        android:scrollbars="none" />
+</LinearLayout>

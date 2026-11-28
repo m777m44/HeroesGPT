@@ -1,0 +1,14 @@
+{
+  "_comment": "HeroesGPT keys config — املأ القيم فقط، لا تضع أبدًا مفاتيح حقيقية في مستودع عام بدون تشفير. التطبيق يقرأ هذا الملف عند بدء التشغيل ويحدثه من raw.githubusercontent.com/m777m44/HeroesGPT/main/keys.json — النسخة المحلية على الهاتف هي المصدر الأساسي.",
+  "_how_to_update": "حرر الملف محليًا (filesDir/data/keys.json) أو من شاشة المفاتيح داخل التطبيق، أو عدّل keys.json في المستودع وسيُدمج تلقائيًا.",
+  "brave": "",
+  "serper": "",
+  "tavily": "",
+  "google_cse_key": "",
+  "google_cse_cx": "",
+  "bing": "",
+  "searxng_url": "https://searx.be",
+  "exa": "",
+  "perplexity": "",
+  "gh_token": ""
+}

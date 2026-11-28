@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_card"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/sr_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/accent"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:maxLines="2"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/sr_snippet"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textColor="@color/text_dim"
+        android:textSize="13sp"
+        android:maxLines="4"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/sr_url"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textColor="@color/accent2"
+        android:textSize="11sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/sr_copy"
+            style="@style/ChipStyle"
+            android:text="@string/search_copy" />
+
+        <TextView
+            android:id="@+id/sr_open"
+            style="@style/ChipStyle"
+            android:text="@string/search_open" />
+    </LinearLayout>
+</LinearLayout>

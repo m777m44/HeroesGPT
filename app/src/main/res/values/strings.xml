@@ -258,8 +258,20 @@
     <string name="vault_restoring">جارٍ فك التشفير والاستعادة…</string>
     <string name="run_script_btn">▶ تشغيل</string>
     <string name="run_script_hint">تشغيل السكربت بعد اكتمال برمجته</string>
-    <string name="console_subtitle">وكيلك الذكي — دردشة • برمجة • بناء تطبيقات • فريق الأبطال</string>
-    <string name="console_welcome">⚡ أهلاً بك! أنا HEROESGPT — وكيلك الذكي الموحد.\n\nاختر وضعًا من الأعلى:\n💬 دردشة — تحدث معي في أي شيء\n💻 برمجة — أكتب لك كودًا كاملًا\n📱 تطبيقات — أبني تطبيقات من فكرتك\n⚔️ فريق الأبطال — الفريق كامل يعمل على مهمتك داخل هذه المحادثة\n\nوشريط الأدوات أعلى الشاشة: الفريق، المفاتيح، GitHub، المكتبة، التحديث.\n\nاكتب رسالتك وسأبدأ فورًا 🚀</string>
+    <string name="console_subtitle">هيروس الكل — دردشة • برمجة • بناء تطبيقات • الفريق يعمل داخليًا</string>
+    <string name="console_welcome">⚡ أهلاً بك! أنا HEROESGPT — وكيلك الذكي الموحد في وضع "هيروس الكل".
+
+كل شيء هنا بلا أزرار إضافية:
+💬 دردشة و تواصل — اكتب أي رسالة
+💻 برمجة — اطلب كودًا كاملًا جاهزًا
+📱 بناء تطبيقات — قل "ابنِ لي تطبيقًا…" وسيعمل الفريق الداخلي (مخطط ← باني ← مراجع) خلف الكواليس
+🔍 البحث — محركات متعددة في واجهة واحدة
+
+المفاتيح تُدار من keys.json تلقائيًا مع تحديث سحابي.
+
+اضغط مطولًا على أي رسالة للنسخ أو إعادة التوليد، وزر الإيقاف يوقف التوليد فورًا.
+
+اكتب رسالتك وسأبدأ فورًا 🚀</string>
     <string name="console_hint">اكتب رسالتك لـ HEROESGPT…</string>
     <string name="console_send">إرسال</string>
     <string name="console_busy">⏳ انتظر انتهاء الطلب الحالي…</string>
@@ -272,4 +284,29 @@
     <string name="tool_github">🐙 GitHub</string>
     <string name="tool_library">📚 المكتبة</string>
     <string name="tool_update">🔄 التحديث</string>
+    <string name="heroes_all">🔥 هيروس الكل</string>
+    <string name="heroes_active">⚡ أنت في هيروس الكل — الدردشة والبرمجة والتطبيقات والفريق تعمل هنا تلقائيًا</string>
+    <string name="tool_search">🔍 بحث</string>
+    <string name="tool_settings">⚙️ إعدادات</string>
+    <string name="con_stop">⏹ إيقاف</string>
+    <string name="con_stopping">⏳ جارٍ إيقاف التوليد…</string>
+    <string name="con_stopped">⏹ أُوقِف التوليد</string>
+    <string name="con_regen">🔄 إعادة التوليد</string>
+    <string name="con_save_session">💾 حفظ الجلسة</string>
+    <string name="con_clear">🗑 مسح المحادثة</string>
+    <string name="settings_title">⚙️ الإعدادات</string>
+    <string name="settings_mode_set">تم تعيين وضع التفكير: %1$s</string>
+    <string name="con_team_note">عمل الفريق الداخلي: مخطط ← باني ← مراجع</string>
+    <string name="search_title">🔍 البحث الموحد</string>
+    <string name="web_search_hint">ابحث في الويب…</string>
+    <string name="search_go">ابحث</string>
+    <string name="search_running">💭 جارٍ البحث في المحركات…</string>
+    <string name="search_no_results">لا نتائج — جرّب محركًا آخر أو كلمات مختلفة</string>
+    <string name="search_copy">📋 نسخ</string>
+    <string name="search_open">↗ فتح</string>
+    <string name="search_key_missing">مفتاح %1$s غير متصل — أضفه في keys.json أو شاشة المفاتيح</string>
+    <string name="search_failed">فشل البحث: %1$s</string>
+    <string name="search_no_browser">لا يوجد متصفح على الجهاز</string>
+    <string name="gh_upload_files">📎 رفع ملفات من الجهاز (SAF)</string>
+    <string name="gh_upload_folder">📁 رفع مجلد كامل (SAF)</string>
 </resources>
